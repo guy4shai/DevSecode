@@ -1,0 +1,36 @@
+{
+    "name": "vscode-devsec-pipeline",
+    "displayName": "VSCode DevSec Pipeline",
+    "publisher": "your-publisher-name",
+    "version": "0.0.1",
+    "engines": {
+      "vscode": "^1.60.0"
+    },
+    "categories": [
+      "Other"
+    ],
+    "activationEvents": [
+      "onCommand:extension.scanContainer"
+    ],
+    "main": "./out/extension.js",
+    "contributes": {
+      "commands": [
+        {
+          "command": "extension.scanContainer",
+          "title": "Scan Container"
+        }
+      ]
+    },
+    "scripts": {
+      "vscode:prepublish": "npm run compile",
+      "compile": "tsc -p .",
+      "watch": "tsc -watch -p .",
+      "package": "vsce package"
+    },
+    "devDependencies": {
+      "@types/node": "^14.14.0",
+      "@types/vscode": "^1.60.0",
+      "typescript": "^4.4.2",
+      "vsce": "^2.5.1"
+    }
+  }
