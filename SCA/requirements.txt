@@ -1,4 +1,0 @@
-flask==0.12
-requests==2.19.0
-PyYAML==4.2b1
-PyJWT==1.7.1
