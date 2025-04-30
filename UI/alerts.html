@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Vulnerability Alerts</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #28292a;
+    }
+
+    h2 {
+      color: white;
+      font-size: 1.2rem;
+    }
+
+    .alerts-column {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 600px;
+      margin-left: 0;
+    }
+
+    .alert {
+      border-left: 10px solid;
+      padding: 12px 16px;
+      background: white;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    .alert:hover {
+      background: #f0f0f0;
+    }
+
+    .details {
+      display: none;
+      margin-top: 8px;
+      font-size: 0.9em;
+      color: #333;
+    }
+
+    .Critical { border-color: rgb(153, 4, 4); }
+    .High     { border-color: red; }
+    .Medium   { border-color: orange; }
+    .Low      { border-color: gold; }
+    .None     { border-color: gray; }
+  </style>
+</head>
+<body>
+
+  <h2>Detected Vulnerabilities</h2>
+  <div class="alerts-column" id="alertsColumn"></div>
+
+  <script>
+    // Function to determine the severity based on entropy value
+    function getSeverity(entropy) {
+      if (entropy > 4.5) return 'Critical';
+      if (entropy > 4) return 'High';
+      if (entropy > 3.5) return 'Medium';
+      return 'Low';
+    }
+  
+    // Custom order for sorting
+    const severityOrder = ['Critical', 'High', 'Medium', 'Low', 'None'];
+  
+    // Fetch the output.json file
+    fetch('gitleaks_report.json')
+      .then(response => {
+        if (!response.ok) {
+          throw new Error("Failed to load JSON file");
+        }
+        return response.json();
+      })
+      .then(data => {
+        const alertsContainer = document.getElementById("alertsColumn");
+  
+        // Add severity to each item
+        data.forEach(item => {
+          item._severity = getSeverity(item.Entropy);
+        });
+  
+        // Sort data by severity
+        data.sort((a, b) => {
+          return severityOrder.indexOf(a._severity) - severityOrder.indexOf(b._severity);
+        });
+  
+        // Render sorted alerts
+        data.forEach(secret => {
+          const severity = secret._severity;
+          const alert = document.createElement("div");
+          alert.classList.add("alert", severity);
+          alert.innerHTML = `
+            <strong>${secret.RuleID}</strong> 
+            <div class="details">
+              <p><strong>Line:</strong> ${secret.StartLine}</p>
+              <p><strong>Description:</strong> ${secret.Description}</p>
+            </div>
+          `;
+  
+          alert.addEventListener("click", () => {
+            const details = alert.querySelector(".details");
+            details.style.display = details.style.display === "block" ? "none" : "block";
+          });
+  
+          alertsContainer.appendChild(alert);
+        });
+      })
+      .catch(error => {
+        console.error("Error loading or parsing output.json:", error);
+      });
+  </script>
+  
+
+</body>
+</html>

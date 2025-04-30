@@ -1,0 +1,58 @@
+[
+    {
+        "tool": "Trivy",
+        "cve_id": "CVE-2022-29217",
+        "package": "PyJWT",
+        "version": "1.7.1",
+        "severity": "HIGH"
+    },
+    {
+        "tool": "Trivy",
+        "cve_id": "CVE-2020-14343",
+        "package": "PyYAML",
+        "version": "4.2b1",
+        "severity": "CRITICAL"
+    },
+    {
+        "tool": "Trivy",
+        "cve_id": "CVE-2018-1000656",
+        "package": "flask",
+        "version": "0.12",
+        "severity": "HIGH"
+    },
+    {
+        "tool": "Trivy",
+        "cve_id": "CVE-2019-1010083",
+        "package": "flask",
+        "version": "0.12",
+        "severity": "HIGH"
+    },
+    {
+        "tool": "Trivy",
+        "cve_id": "CVE-2023-30861",
+        "package": "flask",
+        "version": "0.12",
+        "severity": "HIGH"
+    },
+    {
+        "tool": "Trivy",
+        "cve_id": "CVE-2018-18074",
+        "package": "requests",
+        "version": "2.19.0",
+        "severity": "HIGH"
+    },
+    {
+        "tool": "Trivy",
+        "cve_id": "CVE-2023-32681",
+        "package": "requests",
+        "version": "2.19.0",
+        "severity": "MEDIUM"
+    },
+    {
+        "tool": "Trivy",
+        "cve_id": "CVE-2024-35195",
+        "package": "requests",
+        "version": "2.19.0",
+        "severity": "MEDIUM"
+    }
+]

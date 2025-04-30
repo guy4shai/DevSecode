@@ -32,15 +32,24 @@ function activate(context) {
         ? configPathFallback
         : null;
 
-    // 3. Define a temporary JSON report path
-    const reportPath = path.join(rootPath, 'gitleaks_report.json');
+    // // 3. Define a temporary JSON report path
+    // const reportPath = path.join(rootPath, 'gitleaks_report.json');
 
-    // 4. Build the Gitleaks command
-    //    You can add --no-color --no-banner if your version supports it
-    const command = configToUse
-      ? `gitleaks detect --config="${configToUse}" --no-git --source="${rootPath}" --redact --report-format=json --report-path="${reportPath}"`
-      : `gitleaks detect --no-git --source="${rootPath}" --redact --report-format=json --report-path="${reportPath}"`;
-
+    // // 4. Build the Gitleaks command
+    // //    You can add --no-color --no-banner if your version supports it
+    // const command = configToUse
+    //   ? `gitleaks detect --config="${configToUse}" --no-git --source="${rootPath}" --redact --report-format=json --report-path="${reportPath}"`
+    //   : `gitleaks detect --no-git --source="${rootPath}" --redact --report-format=json --report-path="${reportPath}"`;
+    
+    // 3. Define the JSON report path under UI/json_output
+    const workspaceRoot = workspaceFolders[0].uri.fsPath;
+    const outputDir = path.join(workspaceRoot, 'UI', 'json_output');
+    // Ensure the folder exists
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    // Report will be saved to UI/json_output/gitleaks_report.json
+    const reportPath = path.join(outputDir, 'gitleaks_report.json');
     // Show the user what we're doing (but don't actually run in that terminal)
     const debugTerminal = vscode.window.createTerminal("Secret Scan Debug");
     debugTerminal.show();
