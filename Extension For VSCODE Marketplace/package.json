@@ -1,0 +1,81 @@
+{
+  "name": "DevSecode",
+  "displayName": "DevSecode Secret Scanner",
+  "description": "Detect secrets and credentials in your code with Gitleaks.",
+  "version": "0.0.3",
+  "publisher": "DevSecode",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:DevSecode.runScan"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "DevSecode.runScan",
+        "title": "Run DevSecode Scan"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "DevSecode.runScan",
+          "when": "workspaceFolderCount > 0",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "DevSecode.runScan",
+          "when": "resourceLangId == javascript || resourceLangId == python || resourceLangId == plaintext",
+          "group": "navigation"
+        }
+      ]
+    },
+    "debuggers": [
+      {
+        "type": "devsecscan",
+        "label": "DevSecode Scan",
+        "program": "./extension.js",
+        "runtime": "node",
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "The file to scan"
+              }
+            }
+          }
+        },
+        "configurationSnippets": [
+          {
+            "label": "DevSecode Scan",
+            "body": {
+              "type": "devsecscan",
+              "request": "launch",
+              "name": "Run DevSecode Scan",
+              "program": "${file}"
+            }
+          }
+        ]
+      }
+    ]
+  },
+
+  "scripts": {},
+  "devDependencies": {
+    "@types/vscode": "^1.70.0"
+  },
+  "dependencies": {
+    "gitleaks": "^1.0.0"
+  }
+}
