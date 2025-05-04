@@ -1,8 +1,9 @@
 {
   "name": "DevSecode",
+  "icon": "./logo.png",
   "displayName": "DevSecode Secret Scanner",
   "description": "Detect secrets and credentials in your code with Gitleaks.",
-  "version": "0.0.6",
+  "version": "0.0.9",
   "publisher": "DevSecode",
   "engines": {
     "vscode": "^1.70.0"
