@@ -3,14 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca&family=Queens&display=swap" rel="stylesheet">
     <title>DevSeCode Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Lexend Deca', sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #f8f9fa; 
+            background-color: #f8f9fa;
         }
         .header {
             display: flex;
@@ -18,7 +19,7 @@
             align-items: center;
             padding: 20px;
             background: #ffffff;
-            border-bottom: 1px solid #dbdbdb; 
+            border-bottom: 1px solid #dbdbdb;
             border-radius: 10px;
         }
         .logo {
@@ -44,9 +45,11 @@
         }
         .chart-labels li {
             margin-bottom: 10px;
-            font-weight: bold;
+            font-weight: 550;
             display: flex;
             align-items: center;
+            color: black;
+            font-size: medium;
         }
         .label-color {
             width: 12px;
@@ -65,6 +68,13 @@
     <div class="header">
         <img src="./devsecode_logo.png" alt="DevSeCode Logo" class="logo">
     </div>
+
+    <div style="margin-top: 40px; margin-left: 20px;">
+        <h2 style="color: black; font-family: 'Lexend Deca', sans-serif; font-weight: 700; margin-bottom: 10px;">
+            Secret Detection:
+        </h2>
+    </div>
+
     <div class="chart-container">
         <div class="chart-box">
             <div class="chart-labels" id="typeLabels"></div>
@@ -76,14 +86,16 @@
         </div>
     </div>
 
+    <div style="margin-top: 30px; margin-left: 20px;">
+        <h3 id="vulnerabilityCount" style="color: black; font-weight: 600;"></h3>
+    </div>
+
     <script>
-        async function fetchData() {
-            try {
-                const response = await fetch('gitleaks_report.json'); // Adjusted to a relative path
-                const rawData = await response.json();
-                processData(rawData);
-            } catch (error) {
-                console.error('Error fetching data:', error);
+        function fetchData() {
+            if (typeof reportData !== 'undefined') {
+                processData(reportData);
+            } else {
+                console.error('No data available.');
             }
         }
 
@@ -94,7 +106,7 @@
             rawData.forEach(item => {
                 const type = item.RuleID;
                 vulnerabilitiesByType[type] = (vulnerabilitiesByType[type] || 0) + 1;
-                
+
                 const severity = 'Medium'; // Default severity (can be adjusted based on custom logic)
                 vulnerabilitiesBySeverity[severity] = (vulnerabilitiesBySeverity[severity] || 0) + 1;
             });
@@ -105,13 +117,16 @@
         function createCharts(types, severities) {
             const typeLabelsDiv = document.getElementById('typeLabels');
             const severityLabelsDiv = document.getElementById('severityLabels');
-            const colors = ['#cce0ff','#99ccff','#66b3ff','#a0d8d3','#66b8b2'];
+            const countDisplay = document.getElementById('vulnerabilityCount');
+            const colors = ['#cce0ff', '#99ccff', '#66b3ff', '#a0d8d3', '#66b8b2'];
 
-            typeLabelsDiv.innerHTML = '<ul>' + Object.keys(types).map((label, index) => 
-                `<li><span class="label-color" style="background:${colors[index % colors.length]}"></span>${label}</li>`).join('') + '</ul>';
-            
-            severityLabelsDiv.innerHTML = '<ul>' + Object.keys(severities).map((label, index) => 
-                `<li><span class="label-color" style="background:${colors[index % colors.length]}"></span>${label}</li>`).join('') + '</ul>';
+            typeLabelsDiv.innerHTML = '<ul>' + Object.keys(types).map((label, index) =>
+                `<li><span class="label-color" style="background:${colors[index % colors.length]}"></span>${label}</li>`
+            ).join('') + '</ul>';
+
+            severityLabelsDiv.innerHTML = '<ul>' + Object.keys(severities).map((label, index) =>
+                `<li><span class="label-color" style="background:${colors[index % colors.length]}"></span>${label}</li>`
+            ).join('') + '</ul>';
 
             new Chart(document.getElementById('vulnerabilityTypeChart').getContext('2d'), {
                 type: 'doughnut',
@@ -132,6 +147,9 @@
                     }]
                 }
             });
+
+            const totalVulnerabilities = Object.values(types).reduce((sum, val) => sum + val, 0);
+            countDisplay.textContent = `Number of vulnerabilities detected: ${totalVulnerabilities}`;
         }
 
         fetchData();

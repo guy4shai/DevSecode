@@ -2,7 +2,7 @@
   "name": "DevSecode",
   "displayName": "DevSecode Secret Scanner",
   "description": "Detect secrets and credentials in your code with Gitleaks.",
-  "version": "0.0.3",
+  "version": "0.0.6",
   "publisher": "DevSecode",
   "engines": {
     "vscode": "^1.70.0"
@@ -11,7 +11,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:DevSecode.runScan"
+    "onCommand:DevSecode.runScan",
+    "onCommand:DevSecode.showDashboard"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -19,6 +20,14 @@
       {
         "command": "DevSecode.runScan",
         "title": "Run DevSecode Scan"
+      },
+      {
+        "command": "DevSecode.showDashboard",
+        "title": "Show DevSecode Dashboard"
+      },
+      {
+        "command": "DevSecode.showAlerts",
+        "title": "Show DevSecode Alerts"
       }
     ],
     "menus": {
@@ -27,12 +36,25 @@
           "command": "DevSecode.runScan",
           "when": "workspaceFolderCount > 0",
           "group": "navigation"
+        },
+        {
+          "command": "DevSecode.showDashboard",
+          "when": "workspaceFolderCount > 0",
+          "group": "navigation"
+        },
+        {
+          "command": "DevSecode.showAlerts",
+          "group": "navigation"
         }
       ],
       "explorer/context": [
         {
           "command": "DevSecode.runScan",
           "when": "resourceLangId == javascript || resourceLangId == python || resourceLangId == plaintext",
+          "group": "navigation"
+        },
+        {
+          "command": "DevSecode.showAlerts",
           "group": "navigation"
         }
       ]
@@ -68,9 +90,16 @@
           }
         ]
       }
-    ]
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "devsecodeAlerts",
+          "name": "DevSecode Alerts"
+        }
+      ]
+    }
   },
-
   "scripts": {},
   "devDependencies": {
     "@types/vscode": "^1.70.0"
