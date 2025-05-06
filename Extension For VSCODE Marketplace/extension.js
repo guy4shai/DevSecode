@@ -3,8 +3,8 @@ const cp = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
-let alertsProvider; // גלובלי
-let currentFindings = [];  // 🆕 נוסיף את זה
+let alertsProvider;
+let currentFindings = [];
 
 function activate(context) {
   alertsProvider = new AlertsProvider(context);
@@ -17,7 +17,9 @@ function activate(context) {
     async (uri) => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders) {
-        vscode.window.showErrorMessage("No workspace folder found. Please open a folder first.");
+        vscode.window.showErrorMessage(
+          "No workspace folder found. Please open a folder first."
+        );
         return;
       }
 
@@ -46,48 +48,95 @@ function activate(context) {
           );
           return;
         }
+        const trivyConfigPathProject = path.join(rootPath, "trivy.yaml");
+        const trivyConfigPathFallback = path.join(extensionDir, "trivy.yaml");
+        const trivyConfigToUse = fs.existsSync(trivyConfigPathProject)
+          ? trivyConfigPathProject
+          : fs.existsSync(trivyConfigPathFallback)
+          ? trivyConfigPathFallback
+          : null;
 
+        const trivyReportPath = path.join(rootPath, "trivy_report.json");
+        const trivyCommand = trivyConfigToUse
+          ? `trivy fs "${rootPath}" --config "${trivyConfigToUse}" --format json --output "${trivyReportPath}"`
+          : `trivy fs "${rootPath}" --format json --output "${trivyReportPath}"`;
         vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Running Secret Scan...",
+            title: "Running Security Scans...",
             cancellable: false,
           },
           () => {
             return new Promise((resolve) => {
-              cp.exec(command, { maxBuffer: 1024 * 1000 }, (err, stdout, stderr) => {
-                if (!fs.existsSync(reportPath)) {
-                  vscode.window.showInformationMessage("No JSON report created. Possibly no leaks or an error occurred.");
-                  return resolve();
+              cp.exec(
+                command,
+                { maxBuffer: 1024 * 1000 },
+                (err, stdout, stderr) => {
+                  if (!fs.existsSync(reportPath)) {
+                    vscode.window.showInformationMessage(
+                      "No JSON report created. Possibly no leaks or an error occurred."
+                    );
+                    return resolve();
+                  }
+
+                  const rawContent = fs.readFileSync(reportPath, "utf8").trim();
+                  if (!rawContent) {
+                    vscode.window.showInformationMessage(
+                      "No secrets found. The report file is empty."
+                    );
+                    return resolve();
+                  }
+
+                  let findings;
+                  try {
+                    findings = JSON.parse(rawContent);
+                    currentFindings = findings; // 🆕
+                  } catch (parseErr) {
+                    vscode.window.showWarningMessage(
+                      "Scan completed, but JSON parse failed."
+                    );
+                    return resolve();
+                  }
+
+                  if (!Array.isArray(findings) || findings.length === 0) {
+                    vscode.window.showInformationMessage(
+                      "No secrets found in scan."
+                    );
+                  } else {
+                    showDiagnostics(findings);
+                  }
+
+                  vscode.window.showInformationMessage(
+                    "Secret Scan complete. Opening dashboard..."
+                  );
+                  showDashboard(context, findings);
+                  alertsProvider.refresh();
+
+                  cp.exec(
+                    trivyCommand,
+                    { maxBuffer: 1024 * 1000 },
+                    (trivyErr, trivyStdout, trivyStderr) => {
+                      if (trivyErr) {
+                        vscode.window.showErrorMessage(
+                          "Trivy scan failed. Ensure Trivy is installed and configured properly."
+                        );
+                        return;
+                      }
+
+                      if (!fs.existsSync(trivyReportPath)) {
+                        vscode.window.showInformationMessage(
+                          "No Trivy report created. Possibly no vulnerabilities or an error occurred."
+                        );
+                        return;
+                      }
+
+                      vscode.window.showInformationMessage(
+                        "Trivy SCA scan completed successfully."
+                      );
+                    }
+                  );
                 }
-
-                const rawContent = fs.readFileSync(reportPath, "utf8").trim();
-                if (!rawContent) {
-                  vscode.window.showInformationMessage("No secrets found. The report file is empty.");
-                  return resolve();
-                }
-
-                let findings;
-                try {
-                  findings = JSON.parse(rawContent);
-                  currentFindings = findings; // 🆕
-
-                } catch (parseErr) {
-                  vscode.window.showWarningMessage("Scan completed, but JSON parse failed.");
-                  return resolve();
-                }
-
-                if (!Array.isArray(findings) || findings.length === 0) {
-                  vscode.window.showInformationMessage("No secrets found in scan.");
-                } else {
-                  showDiagnostics(findings);
-                }
-
-                vscode.window.showInformationMessage("Secret Scan complete. Opening dashboard...");
-                showDashboard(context, findings);
-                alertsProvider.refresh();
-                resolve();
-              });
+              );
             });
           }
         );
@@ -95,25 +144,32 @@ function activate(context) {
     }
   );
 
-  let showAlertsCommand = vscode.commands.registerCommand("DevSecode.showAlerts", () => {
-    showAlerts(context);
-  });
+  let showAlertsCommand = vscode.commands.registerCommand(
+    "DevSecode.showAlerts",
+    () => {
+      showAlerts(context);
+    }
+  );
 
   context.subscriptions.push(showAlertsCommand);
   context.subscriptions.push(disposable);
 }
 
 function watchGitleaksReport(context) {
-  const reportPath = path.join(context.extensionPath, "UI", "gitleaks_report.json");
+  const reportPath = path.join(
+    context.extensionPath,
+    "UI",
+    "gitleaks_report.json"
+  );
 
   if (!fs.existsSync(reportPath)) {
-    console.warn('gitleaks_report.json not found, skipping watch setup.');
+    console.warn("gitleaks_report.json not found, skipping watch setup.");
     return;
   }
 
   const watcher = fs.watch(reportPath, (eventType) => {
-    if (eventType === 'change') {
-      console.log('gitleaks_report.json changed, refreshing alerts...');
+    if (eventType === "change") {
+      console.log("gitleaks_report.json changed, refreshing alerts...");
       alertsProvider.refresh();
     }
   });
@@ -122,7 +178,8 @@ function watchGitleaksReport(context) {
 }
 
 function showDiagnostics(findings) {
-  const diagnosticCollection = vscode.languages.createDiagnosticCollection("secretScanner");
+  const diagnosticCollection =
+    vscode.languages.createDiagnosticCollection("secretScanner");
   const diagnosticsMap = new Map();
 
   findings.forEach((finding) => {
@@ -136,11 +193,13 @@ function showDiagnostics(findings) {
     const tooltip = [
       `Rule: ${finding.RuleID}`,
       `Description: ${finding.Description || "Potential secret detected."}`,
-      finding.Secret ? `Secret: ${finding.Secret}` : '',
-      finding.redacted ? "(Secret redacted)" : ''
+      finding.Secret ? `Secret: ${finding.Secret}` : "",
+      finding.redacted ? "(Secret redacted)" : "",
     ].join("\n");
 
-    const message = `${finding.RuleID}: ${finding.Description || "Potential secret detected."}`;
+    const message = `${finding.RuleID}: ${
+      finding.Description || "Potential secret detected."
+    }`;
     const diagnostic = new vscode.Diagnostic(
       range,
       message,
@@ -175,12 +234,17 @@ function showDashboard(context, findings) {
   const htmlPath = path.join(context.extensionPath, "UI", "dashboard.html");
   let html = fs.readFileSync(htmlPath, "utf8");
 
-  const imagePath = vscode.Uri.file(path.join(context.extensionPath, "devsecode_logo.png"));
+  const imagePath = vscode.Uri.file(
+    path.join(context.extensionPath, "devsecode_logo.png")
+  );
   const imageUri = panel.webview.asWebviewUri(imagePath);
 
   html = html
     .replace('src="./devsecode_logo.png"', `src="${imageUri}"`)
-    .replace("</head>", `<script>const reportData = ${JSON.stringify(findings)};</script></head>`);
+    .replace(
+      "</head>",
+      `<script>const reportData = ${JSON.stringify(findings)};</script></head>`
+    );
 
   panel.webview.html = html;
 }
@@ -196,9 +260,14 @@ function showAlerts(context) {
   const htmlPath = path.join(context.extensionPath, "UI", "alerts.html");
   let html = fs.readFileSync(htmlPath, "utf8");
 
-  const jsonPath = vscode.Uri.file(path.join(context.extensionPath, "UI", "gitleaks_report.json"));
+  const jsonPath = vscode.Uri.file(
+    path.join(context.extensionPath, "UI", "gitleaks_report.json")
+  );
   const jsonWebUri = panel.webview.asWebviewUri(jsonPath);
-  html = html.replace("fetch('gitleaks_report.json')", `fetch('${jsonWebUri}')`);
+  html = html.replace(
+    "fetch('gitleaks_report.json')",
+    `fetch('${jsonWebUri}')`
+  );
 
   panel.webview.html = html;
 }
@@ -208,7 +277,11 @@ function deactivate() {}
 class AlertsProvider {
   constructor(context) {
     this.context = context;
-    this.reportPath = path.join(context.extensionPath, "UI", "gitleaks_report.json");
+    this.reportPath = path.join(
+      context.extensionPath,
+      "UI",
+      "gitleaks_report.json"
+    );
     this._onDidChangeTreeData = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
   }
@@ -227,10 +300,10 @@ class AlertsProvider {
     }
 
     function getSeverity(entropy) {
-      if (entropy > 4.5) return 'Critical';
-      if (entropy > 4) return 'High';
-      if (entropy > 3.5) return 'Medium';
-      return 'Low';
+      if (entropy > 4.5) return "Critical";
+      if (entropy > 4) return "High";
+      if (entropy > 3.5) return "Medium";
+      return "Low";
     }
 
     return Promise.resolve(
@@ -239,34 +312,48 @@ class AlertsProvider {
         const desc = item.Description || "No description";
         const severity = getSeverity(item.Entropy);
 
-        const alertItem = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+        const alertItem = new vscode.TreeItem(
+          label,
+          vscode.TreeItemCollapsibleState.None
+        );
         alertItem.description = desc;
-        alertItem.tooltip = 
+        alertItem.tooltip =
           `Rule: ${item.RuleID}\n` +
           `Line: ${item.StartLine}\n` +
           `Description: ${item.Description || "No description"}\n` +
           `Entropy: ${item.Entropy || "N/A"}`;
 
         switch (severity) {
-          case 'Critical':
-            alertItem.iconPath = new vscode.ThemeIcon("error", new vscode.ThemeColor("charts.red"));
+          case "Critical":
+            alertItem.iconPath = new vscode.ThemeIcon(
+              "error",
+              new vscode.ThemeColor("charts.red")
+            );
             break;
-          case 'High':
-            alertItem.iconPath = new vscode.ThemeIcon("warning", new vscode.ThemeColor("charts.orange"));
+          case "High":
+            alertItem.iconPath = new vscode.ThemeIcon(
+              "warning",
+              new vscode.ThemeColor("charts.orange")
+            );
             break;
-          case 'Medium':
-            alertItem.iconPath = new vscode.ThemeIcon("info", new vscode.ThemeColor("charts.yellow"));
+          case "Medium":
+            alertItem.iconPath = new vscode.ThemeIcon(
+              "info",
+              new vscode.ThemeColor("charts.yellow")
+            );
             break;
-          case 'Low':
-            alertItem.iconPath = new vscode.ThemeIcon("info", new vscode.ThemeColor("charts.blue"));
+          case "Low":
+            alertItem.iconPath = new vscode.ThemeIcon(
+              "info",
+              new vscode.ThemeColor("charts.blue")
+            );
             break;
         }
 
         return alertItem;
       })
     );
-}
-
+  }
 }
 
 module.exports = {
