@@ -5,6 +5,7 @@ const fs = require("fs");
 
 let alertsProvider;
 let currentFindings = [];
+let alertPanel; 
 
 function activate(context) {
   alertsProvider = new AlertsProvider(context);
@@ -153,6 +154,16 @@ function activate(context) {
 
   context.subscriptions.push(showAlertsCommand);
   context.subscriptions.push(disposable);
+
+  let openAlertBannerCommand = vscode.commands.registerCommand(
+    "DevSecode.openAlertBanner",  // This is the command we defined earlier
+    (item) => {
+      openAlertBanner(item);  // Call the function to open the detailed view
+    }
+  );
+  
+  context.subscriptions.push(openAlertBannerCommand);
+  
 }
 
 function watchGitleaksReport(context) {
@@ -272,6 +283,50 @@ function showAlerts(context) {
   panel.webview.html = html;
 }
 
+function openAlertBanner(alertItem) {
+  const panelTitle = `Alert: ${alertItem.RuleID}`;
+
+  // Always create a new webview panel for each alert
+  const alertPanel = vscode.window.createWebviewPanel(
+    "alertDetail",
+    panelTitle,
+    vscode.ViewColumn.Active, // Open in the same tab group
+    {
+      enableScripts: true,
+      localResourceRoots: [vscode.Uri.file(path.join(__dirname, "UI"))]
+    }
+  );
+
+  const htmlPath = path.join(__dirname, "UI", "alertpage.html");
+  let html = fs.readFileSync(htmlPath, "utf8");
+
+  // Use currentFindings here instead of findings
+  const reportData = currentFindings; // Use currentFindings instead of findings
+
+  // Create a URI for the JSON file if needed
+  const jsonUri = alertPanel.webview.asWebviewUri(
+    vscode.Uri.file(path.join(__dirname, "UI", "gitleaks_report.json"))
+  );
+
+  // Inject the report data into the HTML before rendering
+  html = html.replace(
+    "</head>",
+    `<script>
+      const reportData = ${JSON.stringify(reportData)};
+      const reportJsonUrl = "${jsonUri}";
+      const targetRuleID = "${alertItem.RuleID}";
+      const targetStartLine = ${alertItem.StartLine};
+    </script></head>`
+  );
+
+  alertPanel.webview.html = html;
+}
+
+
+
+
+
+
 function deactivate() {}
 
 class AlertsProvider {
@@ -308,7 +363,7 @@ class AlertsProvider {
 
     return Promise.resolve(
       currentFindings.map((item) => {
-        const label = `${item.RuleID} [${item.StartLine}]`;
+        const label = `${item.RuleID}: Line ${item.StartLine}`;
         const desc = item.Description || "No description";
         const severity = getSeverity(item.Entropy);
 
@@ -316,12 +371,7 @@ class AlertsProvider {
           label,
           vscode.TreeItemCollapsibleState.None
         );
-        alertItem.description = desc;
-        alertItem.tooltip =
-          `Rule: ${item.RuleID}\n` +
-          `Line: ${item.StartLine}\n` +
-          `Description: ${item.Description || "No description"}\n` +
-          `Entropy: ${item.Entropy || "N/A"}`;
+        
 
         switch (severity) {
           case "Critical":
@@ -349,6 +399,12 @@ class AlertsProvider {
             );
             break;
         }
+
+        alertItem.command = {
+          command: "DevSecode.openAlertBanner",  // Register this command in `activate()`
+          title: "Open Alert",
+          arguments: [item],  // Pass the alert item to the command
+        };
 
         return alertItem;
       })

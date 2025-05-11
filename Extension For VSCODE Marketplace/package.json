@@ -13,7 +13,8 @@
   ],
   "activationEvents": [
     "onCommand:DevSecode.runScan",
-    "onCommand:DevSecode.showDashboard"
+    "onCommand:DevSecode.showDashboard",
+    "onView:devsecodeActivity.devsecodeAlerts"
   ],
   "main": "./extension.js",
   "contributes": {
@@ -29,6 +30,10 @@
       {
         "command": "DevSecode.showAlerts",
         "title": "Show DevSecode Alerts"
+      },
+      {
+        "command": "DevSecode.openAlertBanner",
+        "title": "Open Alert Banner"
       }
     ],
     "menus": {
@@ -57,6 +62,23 @@
         {
           "command": "DevSecode.showAlerts",
           "group": "navigation"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "devsecodeActivity",
+          "title": "DevSecode",
+          "icon": "logo.png"
+        }
+      ]
+    },
+    "views": {
+      "devsecodeActivity": [
+        {
+          "id": "devsecodeAlerts",
+          "name": "Alerts"
         }
       ]
     },
@@ -91,15 +113,7 @@
           }
         ]
       }
-    ],
-    "views": {
-      "explorer": [
-        {
-          "id": "devsecodeAlerts",
-          "name": "DevSecode Alerts"
-        }
-      ]
-    }
+    ]
   },
   "scripts": {},
   "devDependencies": {

@@ -57,7 +57,6 @@
   <div class="alerts-column" id="alertsColumn"></div>
 
   <script>
-    // Function to determine the severity based on entropy value
     function getSeverity(entropy) {
       if (entropy > 4.5) return 'Critical';
       if (entropy > 4) return 'High';
@@ -65,45 +64,41 @@
       return 'Low';
     }
   
-    // Custom order for sorting
     const severityOrder = ['Critical', 'High', 'Medium', 'Low', 'None'];
   
-    // Fetch the output.json file
     fetch('gitleaks_report.json')
       .then(response => {
-        if (!response.ok) {
-          throw new Error("Failed to load JSON file");
-        }
+        if (!response.ok) throw new Error("Failed to load JSON file");
         return response.json();
       })
       .then(data => {
         const alertsContainer = document.getElementById("alertsColumn");
   
-        // Add severity to each item
         data.forEach(item => {
           item._severity = getSeverity(item.Entropy);
         });
   
-        // Sort data by severity
-        data.sort((a, b) => {
-          return severityOrder.indexOf(a._severity) - severityOrder.indexOf(b._severity);
-        });
+        data.sort((a, b) =>
+          severityOrder.indexOf(a._severity) - severityOrder.indexOf(b._severity)
+        );
   
-        // Render sorted alerts
         data.forEach(secret => {
           const severity = secret._severity;
+  
           const alert = document.createElement("div");
           alert.classList.add("alert", severity);
           alert.innerHTML = `
-            <strong>${secret.RuleID}</strong> 
-            <div class="details">
-              <p><strong>Line:</strong> ${secret.StartLine}</p>
-              <p><strong>Description:</strong> ${secret.Description}</p>
-            </div>
+          <strong>${secret.RuleID}</strong>
+          <div class="details">
+            <p><strong>Description:</strong> ${secret.Description}</p>
+            <p><strong>Line:</strong> ${secret.StartLine}</p>
+            <p><strong>Severity:</strong> ${severity}</p>
+          </div>
           `;
+
   
+          const details = alert.querySelector(".details");
           alert.addEventListener("click", () => {
-            const details = alert.querySelector(".details");
             details.style.display = details.style.display === "block" ? "none" : "block";
           });
   
@@ -113,7 +108,7 @@
       .catch(error => {
         console.error("Error loading or parsing gitleaks_report.json:", error);
       });
-  </script>
+  </script>  
   
 
 </body>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca&family=Queens&display=swap" rel="stylesheet">
+  <title>Alert Detail</title>
+  <style>
+    body {
+      font-family: 'Lexend Deca', sans-serif;
+      padding: 20px;
+      background-color: #1e1e1e;
+      color: black;
+    }
+
+    h1 {
+      font-size: 24px;
+      color: black;
+      margin-bottom: 20px;
+    }
+
+    .alert-card {
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 20px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .alert {
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      background-color: #f9f9f9;
+      border: 1px solid #e0e0e0;
+      font-size: 16.5px;
+    }
+
+
+    .details p {
+      margin: 8px 0;
+      font-size: 16.5px;
+    }
+
+    .details strong {
+      color: #000000;
+      font-family: 'Lexend Deca', sans-serif;
+      font-size: 16.5px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1 style="color: rgb(224, 223, 223); font-size: 24px; font-weight: 550;">
+  Alert Details:
+  </h1>
+
+  <div id="alertsContainer"></div>
+
+  <script>
+    
+    // Get the container to append the alerts
+    const alertsContainer = document.getElementById("alertsContainer");
+
+    // Find the alert that matches the RuleID and StartLine
+    const match = reportData.find(item =>
+      item.RuleID === targetRuleID && item.StartLine === targetStartLine
+    );
+
+    if (!match) {
+      alertsContainer.innerHTML = "<p>No matching alert found.</p>";
+    } else {
+      // Create an alert element for the matched item
+      const alert = document.createElement("div");
+      const severity = match._severity || 'low'; // Default to low if no severity provided
+
+      alert.classList.add("alert", severity);
+      alert.innerHTML = `
+        <strong>Rule: ${match.RuleID}</strong>
+        <div class="details">
+          <p><strong>Description:</strong> ${match.Description || "N/A"}</p>
+          <p><strong>Line:</strong> ${match.StartLine}</p>
+          <p><strong>Severity:</strong> ${severity.charAt(0).toUpperCase() + severity.slice(1)}</p>
+        </div>
+      `;
+      
+      // Append the alert to the container
+      alertsContainer.appendChild(alert);
+    }
+  </script>
+
+</body>
+</html>
