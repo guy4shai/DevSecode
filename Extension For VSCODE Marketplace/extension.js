@@ -319,15 +319,34 @@ function openAlertBanner(alertItem) {
     </script></head>`
   );
 
+  
   alertPanel.webview.html = html;
+  
+  alertPanel.webview.onDidReceiveMessage(
+    (message) => {
+      if (message.command === 'goToLine') {
+        const { filePath, lineNumber } = message;
+        const uri = vscode.Uri.file(filePath);
+        vscode.workspace.openTextDocument(uri).then(doc => {
+          vscode.window.showTextDocument(doc, {
+            selection: new vscode.Range(
+              new vscode.Position(lineNumber - 1, 0),
+              new vscode.Position(lineNumber - 1, 0)
+            )
+          });
+        });
+      }
+    },
+    undefined,
+    []
+  );
 }
 
 
 
 
-
-
 function deactivate() {}
+
 
 class AlertsProvider {
   constructor(context) {
@@ -354,6 +373,15 @@ class AlertsProvider {
       return Promise.resolve([]);
     }
 
+    // Define severity ranking
+    const severityRank = {
+      Critical: 0,
+      High: 1,
+      Medium: 2,
+      Low: 3,
+    };
+
+    // Map entropy to severity
     function getSeverity(entropy) {
       if (entropy > 4.5) return "Critical";
       if (entropy > 4) return "High";
@@ -361,56 +389,49 @@ class AlertsProvider {
       return "Low";
     }
 
+    // Enrich, sort, and map items
+    const sortedFindings = currentFindings
+      .map(item => ({
+        ...item,
+        severity: getSeverity(item.Entropy)
+      }))
+      .sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
+
     return Promise.resolve(
-      currentFindings.map((item) => {
+      sortedFindings.map(item => {
         const label = `${item.RuleID}: Line ${item.StartLine}`;
         const desc = item.Description || "No description";
-        const severity = getSeverity(item.Entropy);
+        const severity = item.severity;
 
         const alertItem = new vscode.TreeItem(
           label,
           vscode.TreeItemCollapsibleState.None
         );
-        
 
-        switch (severity) {
-          case "Critical":
-            alertItem.iconPath = new vscode.ThemeIcon(
-              "error",
-              new vscode.ThemeColor("charts.red")
-            );
-            break;
-          case "High":
-            alertItem.iconPath = new vscode.ThemeIcon(
-              "warning",
-              new vscode.ThemeColor("charts.orange")
-            );
-            break;
-          case "Medium":
-            alertItem.iconPath = new vscode.ThemeIcon(
-              "info",
-              new vscode.ThemeColor("charts.yellow")
-            );
-            break;
-          case "Low":
-            alertItem.iconPath = new vscode.ThemeIcon(
-              "info",
-              new vscode.ThemeColor("charts.blue")
-            );
-            break;
-        }
+        alertItem.tooltip = `${desc}\nSeverity: ${severity}`;
+        alertItem.description = severity;
+
+        // Set severity-specific icon
+        const iconFilename = `${severity.toLowerCase()}_icon.png`;
+        alertItem.iconPath = vscode.Uri.file(
+          path.join(this.context.extensionPath, iconFilename)
+        );
 
         alertItem.command = {
-          command: "DevSecode.openAlertBanner",  // Register this command in `activate()`
+          command: "DevSecode.openAlertBanner",
           title: "Open Alert",
-          arguments: [item],  // Pass the alert item to the command
+          arguments: [item],
         };
 
+        
         return alertItem;
       })
     );
   }
 }
+
+
+
 
 module.exports = {
   activate,
