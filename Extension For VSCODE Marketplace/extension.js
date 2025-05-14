@@ -5,7 +5,7 @@ const fs = require("fs");
 
 let alertsProvider;
 let currentFindings = [];
-let alertPanel; 
+let alertPanel;
 
 function activate(context) {
   alertsProvider = new AlertsProvider(context);
@@ -61,6 +61,7 @@ function activate(context) {
         const trivyCommand = trivyConfigToUse
           ? `trivy fs "${rootPath}" --config "${trivyConfigToUse}" --format json --output "${trivyReportPath}"`
           : `trivy fs "${rootPath}" --format json --output "${trivyReportPath}"`;
+
         vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
@@ -91,7 +92,7 @@ function activate(context) {
                   let findings;
                   try {
                     findings = JSON.parse(rawContent);
-                    currentFindings = findings; // 🆕
+                    currentFindings = findings;
                   } catch (parseErr) {
                     vscode.window.showWarningMessage(
                       "Scan completed, but JSON parse failed."
@@ -116,7 +117,7 @@ function activate(context) {
                   cp.exec(
                     trivyCommand,
                     { maxBuffer: 1024 * 1000 },
-                    (trivyErr, trivyStdout, trivyStderr) => {
+                    (trivyErr) => {
                       if (trivyErr) {
                         vscode.window.showErrorMessage(
                           "Trivy scan failed. Ensure Trivy is installed and configured properly."
@@ -156,14 +157,13 @@ function activate(context) {
   context.subscriptions.push(disposable);
 
   let openAlertBannerCommand = vscode.commands.registerCommand(
-    "DevSecode.openAlertBanner",  // This is the command we defined earlier
+    "DevSecode.openAlertBanner",
     (item) => {
-      openAlertBanner(item);  // Call the function to open the detailed view
+      openAlertBanner(item);
     }
   );
-  
+
   context.subscriptions.push(openAlertBannerCommand);
-  
 }
 
 function watchGitleaksReport(context) {
@@ -250,11 +250,31 @@ function showDashboard(context, findings) {
   );
   const imageUri = panel.webview.asWebviewUri(imagePath);
 
+  // 🆕 קריאת הדוח של Trivy
+  const trivyReportPath = path.join(
+    vscode.workspace.workspaceFolders?.[0].uri.fsPath || "",
+    "trivy_report.json"
+  );
+
+  let trivyData = null;
+  if (fs.existsSync(trivyReportPath)) {
+    try {
+      const trivyRaw = fs.readFileSync(trivyReportPath, "utf8");
+      trivyData = JSON.parse(trivyRaw);
+    } catch (err) {
+      console.warn("Failed to parse trivy report");
+    }
+  }
+
+  // 🧠 הוספת שני הדוחות כסקריפטים לדף
   html = html
     .replace('src="./devsecode_logo.png"', `src="${imageUri}"`)
     .replace(
       "</head>",
-      `<script>const reportData = ${JSON.stringify(findings)};</script></head>`
+      `<script>
+        const reportData = ${JSON.stringify(findings)};
+        const scaData = ${JSON.stringify(trivyData || [])};
+      </script></head>`
     );
 
   panel.webview.html = html;
@@ -286,29 +306,25 @@ function showAlerts(context) {
 function openAlertBanner(alertItem) {
   const panelTitle = `Alert: ${alertItem.RuleID}`;
 
-  // Always create a new webview panel for each alert
   const alertPanel = vscode.window.createWebviewPanel(
     "alertDetail",
     panelTitle,
-    vscode.ViewColumn.Active, // Open in the same tab group
+    vscode.ViewColumn.Active,
     {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.file(path.join(__dirname, "UI"))]
+      localResourceRoots: [vscode.Uri.file(path.join(__dirname, "UI"))],
     }
   );
 
   const htmlPath = path.join(__dirname, "UI", "alertpage.html");
   let html = fs.readFileSync(htmlPath, "utf8");
 
-  // Use currentFindings here instead of findings
-  const reportData = currentFindings; // Use currentFindings instead of findings
+  const reportData = currentFindings;
 
-  // Create a URI for the JSON file if needed
   const jsonUri = alertPanel.webview.asWebviewUri(
     vscode.Uri.file(path.join(__dirname, "UI", "gitleaks_report.json"))
   );
 
-  // Inject the report data into the HTML before rendering
   html = html.replace(
     "</head>",
     `<script>
@@ -319,20 +335,19 @@ function openAlertBanner(alertItem) {
     </script></head>`
   );
 
-  
   alertPanel.webview.html = html;
-  
+
   alertPanel.webview.onDidReceiveMessage(
     (message) => {
-      if (message.command === 'goToLine') {
+      if (message.command === "goToLine") {
         const { filePath, lineNumber } = message;
         const uri = vscode.Uri.file(filePath);
-        vscode.workspace.openTextDocument(uri).then(doc => {
+        vscode.workspace.openTextDocument(uri).then((doc) => {
           vscode.window.showTextDocument(doc, {
             selection: new vscode.Range(
               new vscode.Position(lineNumber - 1, 0),
               new vscode.Position(lineNumber - 1, 0)
-            )
+            ),
           });
         });
       }
@@ -342,11 +357,7 @@ function openAlertBanner(alertItem) {
   );
 }
 
-
-
-
 function deactivate() {}
-
 
 class AlertsProvider {
   constructor(context) {
@@ -373,7 +384,6 @@ class AlertsProvider {
       return Promise.resolve([]);
     }
 
-    // Define severity ranking
     const severityRank = {
       Critical: 0,
       High: 1,
@@ -381,7 +391,6 @@ class AlertsProvider {
       Low: 3,
     };
 
-    // Map entropy to severity
     function getSeverity(entropy) {
       if (entropy > 4.5) return "Critical";
       if (entropy > 4) return "High";
@@ -389,16 +398,15 @@ class AlertsProvider {
       return "Low";
     }
 
-    // Enrich, sort, and map items
     const sortedFindings = currentFindings
-      .map(item => ({
+      .map((item) => ({
         ...item,
-        severity: getSeverity(item.Entropy)
+        severity: getSeverity(item.Entropy),
       }))
       .sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
 
     return Promise.resolve(
-      sortedFindings.map(item => {
+      sortedFindings.map((item) => {
         const label = `${item.RuleID}: Line ${item.StartLine}`;
         const desc = item.Description || "No description";
         const severity = item.severity;
@@ -411,7 +419,6 @@ class AlertsProvider {
         alertItem.tooltip = `${desc}\nSeverity: ${severity}`;
         alertItem.description = severity;
 
-        // Set severity-specific icon
         const iconFilename = `${severity.toLowerCase()}_icon.png`;
         alertItem.iconPath = vscode.Uri.file(
           path.join(this.context.extensionPath, iconFilename)
@@ -423,15 +430,11 @@ class AlertsProvider {
           arguments: [item],
         };
 
-        
         return alertItem;
       })
     );
   }
 }
-
-
-
 
 module.exports = {
   activate,
