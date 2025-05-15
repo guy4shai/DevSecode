@@ -146,6 +146,25 @@ function activate(context) {
     }
   );
 
+ const pythonCommand = `python3 "${path.join(extensionDir, 'DAST', 'dast.py')}"`;
+
+cp.exec(pythonCommand, { maxBuffer: 1024 * 1000 }, (pyErr, pyStdout, pyStderr) => {
+  if (pyErr) {
+    vscode.window.showErrorMessage("DAST scan failed.");
+    console.error(pyErr);
+    return;
+  }
+
+  vscode.window.showInformationMessage("DAST scan completed successfully.");
+});
+
+  let showAlertsCommand = vscode.commands.registerCommand(
+    "DevSecode.showAlerts",
+    () => {
+      showAlerts(context);
+    }
+  );
+
   let showAlertsCommand = vscode.commands.registerCommand(
     "DevSecode.showAlerts",
     () => {
