@@ -165,13 +165,6 @@ cp.exec(pythonCommand, { maxBuffer: 1024 * 1000 }, (pyErr, pyStdout, pyStderr) =
     }
   );
 
-  let showAlertsCommand = vscode.commands.registerCommand(
-    "DevSecode.showAlerts",
-    () => {
-      showAlerts(context);
-    }
-  );
-
   context.subscriptions.push(showAlertsCommand);
   context.subscriptions.push(disposable);
 
