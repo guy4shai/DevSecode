@@ -1,0 +1,6 @@
+{
+    "severityFilter": ["High", "Medium"],
+    "sortBy": "severity",
+    "timeframe": "last_30_days"
+  }
+  
