@@ -1,0 +1,25 @@
+{
+  "SchemaVersion": 2,
+  "CreatedAt": "2025-05-18T11:13:34.5457119+03:00",
+  "ArtifactName": "c:/Users/eden1/Downloads/DevSecode-main (5)/DevSecode-main/חדש Extension For VSCODE Marketplace 2/ÎùÎôÎ® Extension For VSCODE Marketplace",
+  "ArtifactType": "filesystem",
+  "Metadata": {
+    "ImageConfig": {
+      "architecture": "",
+      "created": "0001-01-01T00:00:00Z",
+      "os": "",
+      "rootfs": {
+        "type": "",
+        "diff_ids": null
+      },
+      "config": {}
+    }
+  },
+  "Results": [
+    {
+      "Target": "package-lock.json",
+      "Class": "lang-pkgs",
+      "Type": "npm"
+    }
+  ]
+}

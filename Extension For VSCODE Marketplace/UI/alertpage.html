@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca&family=Queens&display=swap" rel="stylesheet" />
+  <title>Alert Detail</title>
+  <style>
+    body {
+      font-family: 'Lexend Deca', sans-serif;
+      padding: 20px;
+      background-color: #1e1e1e;
+      color: white;
+    }
+    h1 {
+      font-size: 24px;
+      color: rgb(224, 223, 223);
+      margin-bottom: 20px;
+      font-weight: 550;
+    }
+    .alert-card {
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 20px;
+      background: #fff;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+      color: black;
+    }
+    .alert {
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      background-color: #f9f9f9;
+      border: 1px solid #e0e0e0;
+      font-size: 16.3px;
+      color: black;
+    }
+    .details p {
+      margin: 8px 0;
+      font-size: 16.3px;
+    }
+    .details strong {
+      color: #000000;
+      font-family: 'Lexend Deca', sans-serif;
+      font-size: 16.3px;
+    }
+    .alert.critical {
+      background-color: #B33A3A;
+      color: #fff;
+    }
+    .alert.high {
+      background-color: #FF6F61;
+      color: #fff;
+    }
+    .alert.medium {
+      background-color: #FFB347;
+      color: #000;
+    }
+    .alert.low {
+      background-color: #FFF176;
+      color: #000;
+    }
+    .go-to-line-btn {
+      background-color: #afaeae;
+      color: #000000;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      margin-top: 20px;
+      font-family: 'Lexend Deca', sans-serif;
+    }
+    .go-to-line-btn:hover {
+      background-color: #cfcece;
+    }
+  </style>
+</head>
+<body>
+
+  <h1 id="alertTitle">Alert:</h1>
+
+  <div id="alertsContainer"></div>
+
+  <button id="goToLineButton" class="go-to-line-btn">Go to Line</button>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+    const alertsContainer = document.getElementById("alertsContainer");
+
+    const severityColors = {
+      Critical: "#B33A3A",
+      High: "#FF6F61",
+      Medium: "#FFB347",
+      Low: "#FFF176",
+      Unknown: "#c5c5c5"
+    };
+
+    // פונקציה למציאת Severity מדוחות Trivy ו-Gitleaks
+    function getSeverity(item) {
+      if (item.Entropy !== undefined) {
+        if (item.Entropy > 4.5) return "Critical";
+        if (item.Entropy > 4) return "High";
+        if (item.Entropy > 3.5) return "Medium";
+        return "Low";
+      } else if (item.Severity) {
+        const sev = item.Severity.toLowerCase();
+        if (sev === "critical") return "Critical";
+        if (sev === "high") return "High";
+        if (sev === "medium") return "Medium";
+        if (sev === "low") return "Low";
+      } else if (item.issue_severity) {
+        const sev = item.issue_severity.toLowerCase();
+        if (sev === "critical") return "Critical";
+        if (sev === "high") return "High";
+        if (sev === "medium") return "Medium";
+        if (sev === "low") return "Low";
+      }
+      return "Unknown";
+    }
+
+
+    // פונקציה למציאת המזהה הייחודי של הארת
+    function getAlertId(item) {
+      return item.RuleID || item.VulnerabilityID || item.test_name || "";
+    }
+
+    // מציאת הארת מתאימה מתוך הדוח
+    function getLine(item) {
+      return item.StartLine ?? item.Location?.StartLine ?? item.line ?? item.line_number ?? 0;
+    }
+
+
+    const match = reportData.find(item =>
+      getAlertId(item) === targetRuleID &&
+      (getLine(item) == targetStartLine || targetStartLine === 0)  // השוואה לא קשיחה
+    );
+
+
+
+    if (!match) {
+      alertsContainer.innerHTML = "<p style='color: white;'>No matching alert found.</p>";
+    } else {
+      const severity = getSeverity(match);
+      const color = severityColors[severity] || severityColors.Unknown;
+
+      const alert = document.createElement("div");
+      alert.classList.add("alert", severity.toLowerCase());
+
+   
+      const description = match.Description || match.Title || match.issue_text || "N/A";
+      const lineNum = match.StartLine || match.Location?.StartLine || match.line_number || "N/A";
+
+      alert.innerHTML = `
+        <div class="details">
+          <p><strong>Description:</strong> ${description}</p>
+          <p><strong>Line:</strong> ${lineNum}</p>
+          <p><strong>Severity:</strong> ${severity}</p>
+        </div>
+      `;
+      alertsContainer.appendChild(alert);
+
+      // עדכון כותרת עם צבע Severity ו־ID
+      document.getElementById("alertTitle").innerHTML =
+        `Alert: <strong style="color: ${color};">${getAlertId(match)}</strong>`;
+      
+      // אירוע כפתור "Go to Line"
+      const goToLineBtn = document.getElementById("goToLineButton");
+
+      if (!filePath || lineNum === "N/A") {
+        goToLineBtn.disabled = true;
+        goToLineBtn.style.cursor = "not-allowed";
+        goToLineBtn.title = "File path or line number is not available";
+      } else {
+        goToLineBtn.disabled = false;
+        goToLineBtn.style.cursor = "pointer";
+        goToLineBtn.title = "Go to line in file";
+
+        goToLineBtn.addEventListener("click", function () {
+          vscode.postMessage({
+            command: 'goToLine',
+            filePath: filePath,
+            lineNumber: lineNum
+          });
+        });
+      }
+
+
+    }
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,6 @@
+rules:
+  - id: insecure-eval
+    patterns:
+      - pattern: eval(...)
+    message: "Avoid using eval()."
+    severity: ERROR
