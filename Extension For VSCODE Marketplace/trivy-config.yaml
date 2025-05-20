@@ -1,0 +1,24 @@
+scanners:
+  - vuln
+  - license
+
+vuln-type:
+  - os
+  - library
+
+severity:
+  - CRITICAL
+  - HIGH
+  - MEDIUM
+  - LOW
+
+ignore-unfixed: true
+
+skip-dirs:
+  - node_modules
+  - vendor
+
+output:
+  format: json
+
+timeout: 5m
