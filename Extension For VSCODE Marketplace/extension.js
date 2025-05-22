@@ -2,8 +2,7 @@ const vscode = require("vscode");
 const cp = require("child_process");
 const path = require("path");
 const fs = require("fs");
-const { generatePDFReport } = require('./add-pdf/reportGenerator');
-
+const { generatePDFReport } = require("./add-pdf/reportGenerator");
 
 let alertsProvider;
 let currentFindings = [];
@@ -42,7 +41,7 @@ function activate(context) {
         : null;
 
       const reportPath = path.join(rootPath, "gitleaks_report.json");
-      
+
       const command = configToUse
         ? `gitleaks detect --config="${configToUse}" --no-git --source="${rootPath}" --redact --report-format=json --report-path="${reportPath}"`
         : `gitleaks detect --no-git --source="${rootPath}" --redact --report-format=json --report-path="${reportPath}"`;
@@ -54,7 +53,7 @@ function activate(context) {
           );
           return;
         }
-        
+
         const trivyConfigPathProject = path.join(rootPath, "trivy.yaml");
         const trivyConfigPathFallback = path.join(extensionDir, "trivy.yaml");
         const trivyConfigToUse = fs.existsSync(trivyConfigPathProject)
@@ -117,7 +116,6 @@ function activate(context) {
                   vscode.window.showInformationMessage(
                     "Secret Scan complete. Opening dashboard..."
                   );
-                  
 
                   cp.exec(
                     trivyCommand,
@@ -139,11 +137,22 @@ function activate(context) {
 
                       let trivyData = [];
                       try {
-                        const trivyRaw = fs.readFileSync(trivyReportPath, 'utf8');
+                        const trivyRaw = fs.readFileSync(
+                          trivyReportPath,
+                          "utf8"
+                        );
                         trivyData = JSON.parse(trivyRaw);
                         console.log("✅ Trivy report loaded successfully.");
+
+                        // ✅ הוספת מספרי שורות ל־Vulnerabilities
+                        attachLinesToTrivy(
+                          trivyReportPath,
+                          path.join(rootPath, "requirements.txt")
+                        );
                       } catch (err) {
-                        vscode.window.showWarningMessage("⚠️ Failed to parse trivy_report.json.");
+                        vscode.window.showWarningMessage(
+                          "⚠️ Failed to parse trivy_report.json."
+                        );
                         console.warn("Trivy parsing error:", err);
                       }
 
@@ -152,53 +161,73 @@ function activate(context) {
                       vscode.window.showInformationMessage(
                         "Trivy SCA scan completed successfully."
                       );
-                      
+
                       try {
-                        currentTrivyFindings = JSON.parse(fs.readFileSync(trivyReportPath, 'utf8'));
+                        currentTrivyFindings = JSON.parse(
+                          fs.readFileSync(trivyReportPath, "utf8")
+                        );
                       } catch (e) {
                         currentTrivyFindings = [];
                       }
 
-                      const banditReportPath = path.join(rootPath, "bandit_report.json");
+                      const banditReportPath = path.join(
+                        rootPath,
+                        "bandit_report.json"
+                      );
                       const banditCommand = `bandit -r "${rootPath}" --exclude "${rootPath}/node_modules,${rootPath}/venv" -f json -o "${banditReportPath}"`;
 
-
-                      const semgrepReportPath = path.join(rootPath, "semgrep_report.json");
+                      const semgrepReportPath = path.join(
+                        rootPath,
+                        "semgrep_report.json"
+                      );
                       const semgrepCommand = `semgrep --config auto --json --output "${semgrepReportPath}" "${rootPath}"`;
-                      
-                      
-                      const util = require('util');
+
+                      const util = require("util");
                       const exec = util.promisify(cp.exec);
-                      
+
                       (async () => {
                         try {
-                          await exec(semgrepCommand, { maxBuffer: 1024 * 1000 });
-                          vscode.window.showInformationMessage("✅ Semgrep scan completed.");
+                          await exec(semgrepCommand, {
+                            maxBuffer: 1024 * 1000,
+                          });
+                          vscode.window.showInformationMessage(
+                            "✅ Semgrep scan completed."
+                          );
                         } catch (e) {
-                          vscode.window.showWarningMessage("❌ Semgrep scan failed.");
+                          vscode.window.showWarningMessage(
+                            "❌ Semgrep scan failed."
+                          );
                           console.error("Semgrep error:", e.stderr || e);
                         }
-                      
-                        
+
                         try {
                           await exec(banditCommand, { maxBuffer: 1024 * 1000 });
-                          vscode.window.showInformationMessage("✅ Bandit scan completed.");
+                          vscode.window.showInformationMessage(
+                            "✅ Bandit scan completed."
+                          );
                         } catch (e) {
                           console.error("Bandit error:", e.stderr || e);
                         }
-                        
+
                         let banditData = [];
 
                         try {
-                          const banditRaw = fs.readFileSync(banditReportPath, 'utf8');
+                          const banditRaw = fs.readFileSync(
+                            banditReportPath,
+                            "utf8"
+                          );
                           banditData = JSON.parse(banditRaw);
                           console.log("✅ Bandit report loaded successfully.");
                         } catch (err) {
-                          vscode.window.showWarningMessage("⚠️ Failed to parse bandit_report.json.");
+                          vscode.window.showWarningMessage(
+                            "⚠️ Failed to parse bandit_report.json."
+                          );
                           console.warn("Bandit parsing error:", err);
                         }
 
-                        vscode.window.showInformationMessage("Bandit scan completed successfully.");
+                        vscode.window.showInformationMessage(
+                          "Bandit scan completed successfully."
+                        );
 
                         try {
                           currentBanditFindings = banditData.results || [];
@@ -207,10 +236,9 @@ function activate(context) {
                         }
 
                         showDashboard(context, findings);
-                        alertsProvider.refresh(); 
+                        alertsProvider.refresh();
                         resolve(); // ✅ מסיים את הספינר של VS Code
-                      })();        
-                                   
+                      })();
                     }
                   );
                 }
@@ -219,11 +247,9 @@ function activate(context) {
           }
         );
       });
-
     }
   );
 
-  
   context.subscriptions.push(disposable);
 
   let openAlertBannerCommand = vscode.commands.registerCommand(
@@ -234,121 +260,153 @@ function activate(context) {
   );
 
   context.subscriptions.push(openAlertBannerCommand);
-  const generatePdfCommand = vscode.commands.registerCommand('devsecode.generateCustomPDF', async () => {
-    // 🟩 בחירת חומרות
-    const severityOptions = await vscode.window.showQuickPick(['Critical','High', 'Medium', 'Low'], {
-      canPickMany: true,
-      placeHolder: 'Select severity levels to include'
-    });
-
-    if (!severityOptions || severityOptions.length === 0) {
-      vscode.window.showErrorMessage('❌ Please select at least one severity level.');
-      return;
-    }
-
-    // 🟩 בחירת מיון
-    const sortOrder = await vscode.window.showQuickPick(['Severity', 'Line Number'], {
-      placeHolder: 'Select how to sort the report'
-    });
-
-    if (!sortOrder) {
-      vscode.window.showErrorMessage('❌ Please select a sort order for the report.');
-      return;
-    }
-
-    const sortKey = sortOrder === 'Line Number' ? 'line' : 'severity';
-
-    // 🟩 איתור תיקיית העבודה
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders || workspaceFolders.length === 0) {
-      vscode.window.showErrorMessage('❌ No workspace folder found.');
-      return;
-    }
-    const workspacePath = workspaceFolders[0].uri.fsPath;
-
-    // 🟩 קונפיגורציית הדוח
-    const config = {
-      selectedSeverities: severityOptions, // ✅ רמות חומרה שנבחרו
-      sortBy: sortKey,
-      workspacePath: workspacePath
-    };
-
-    // שמירה מקומית של config (לא חובה, רק לצורך פיתוח)
-    const configPath = path.join(__dirname, 'add-pdf', 'report.config.json');
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-
-    // 🟩 טוען את הדוח JSON
-    const findingsPath = path.join(__dirname, 'UI', 'gitleaks_report.json');
-    if (!fs.existsSync(findingsPath)) {
-      vscode.window.showErrorMessage('❌ Could not find gitleaks_report.json in UI folder.');
-      return;
-    }
-    const trivyPath = path.join(workspacePath, 'trivy_report.json');
-    const semgrepPath = path.join(workspacePath, 'semgrep_report.json');
-    const banditPath = path.join(workspacePath, 'bandit_report.json');
-
-    let trivyFindings = [];
-    let semgrepFindings = [];
-    let banditFindings = [];
-
-    if (fs.existsSync(trivyPath)) {
-      try {
-        trivyFindings = JSON.parse(fs.readFileSync(trivyPath, 'utf-8'));
-      } catch (e) {
-        vscode.window.showWarningMessage("⚠️ Failed to load trivy_report.json.");
-      }
-    }
-
-    if (fs.existsSync(semgrepPath)) {
-      try {
-        semgrepFindings = JSON.parse(fs.readFileSync(semgrepPath, 'utf-8'));
-      } catch (e) {
-        vscode.window.showWarningMessage("⚠️ Failed to load semgrep_report.json.");
-      }
-    }
-
-    if (fs.existsSync(banditPath)) {
-      try {
-        banditFindings = JSON.parse(fs.readFileSync(banditPath, 'utf-8'));
-      } catch (e) {
-        vscode.window.showWarningMessage("⚠️ Failed to load bandit_report.json.");
-      }
-    }
-    let findings;
-    try {
-      const findingsRaw = fs.readFileSync(findingsPath, 'utf-8');
-      findings = JSON.parse(findingsRaw);
-    } catch (e) {
-      vscode.window.showErrorMessage('❌ Failed to read or parse gitleaks_report.json.');
-      return;
-    }
-
-    const reportPath = await generatePDFReport(findings, config, {
-      trivyFindings,
-      semgrepFindings,
-      banditFindings
-    });
-    // ✅ פתיחת הדוח לאחר יצירתו
-    vscode.window.showInformationMessage('✅ PDF report generated successfully.', 'Open Report')
-      .then(async selection => {
-        if (selection === 'Open Report') {
-          try {
-            const open = await import('open').then(mod => mod.default);
-            await open(reportPath);
-          } catch (err) {
-            vscode.window.showErrorMessage(`❌ Failed to open the report: ${err.message}`);
-          }
+  const generatePdfCommand = vscode.commands.registerCommand(
+    "devsecode.generateCustomPDF",
+    async () => {
+      // 🟩 בחירת חומרות
+      const severityOptions = await vscode.window.showQuickPick(
+        ["Critical", "High", "Medium", "Low"],
+        {
+          canPickMany: true,
+          placeHolder: "Select severity levels to include",
         }
+      );
+
+      if (!severityOptions || severityOptions.length === 0) {
+        vscode.window.showErrorMessage(
+          "❌ Please select at least one severity level."
+        );
+        return;
+      }
+
+      // 🟩 בחירת מיון
+      const sortOrder = await vscode.window.showQuickPick(
+        ["Severity", "Line Number"],
+        {
+          placeHolder: "Select how to sort the report",
+        }
+      );
+
+      if (!sortOrder) {
+        vscode.window.showErrorMessage(
+          "❌ Please select a sort order for the report."
+        );
+        return;
+      }
+
+      const sortKey = sortOrder === "Line Number" ? "line" : "severity";
+
+      // 🟩 איתור תיקיית העבודה
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders || workspaceFolders.length === 0) {
+        vscode.window.showErrorMessage("❌ No workspace folder found.");
+        return;
+      }
+      const workspacePath = workspaceFolders[0].uri.fsPath;
+
+      // 🟩 קונפיגורציית הדוח
+      const config = {
+        selectedSeverities: severityOptions, // ✅ רמות חומרה שנבחרו
+        sortBy: sortKey,
+        workspacePath: workspacePath,
+      };
+
+      // שמירה מקומית של config (לא חובה, רק לצורך פיתוח)
+      const configPath = path.join(__dirname, "add-pdf", "report.config.json");
+      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+
+      // 🟩 טוען את הדוח JSON
+      const findingsPath = path.join(__dirname, "UI", "gitleaks_report.json");
+      if (!fs.existsSync(findingsPath)) {
+        vscode.window.showErrorMessage(
+          "❌ Could not find gitleaks_report.json in UI folder."
+        );
+        return;
+      }
+      const trivyPath = path.join(workspacePath, "trivy_report.json");
+      const semgrepPath = path.join(workspacePath, "semgrep_report.json");
+      const banditPath = path.join(workspacePath, "bandit_report.json");
+
+      let trivyFindings = [];
+      let semgrepFindings = [];
+      let banditFindings = [];
+
+      if (fs.existsSync(trivyPath)) {
+        try {
+          trivyFindings = JSON.parse(fs.readFileSync(trivyPath, "utf-8"));
+        } catch (e) {
+          vscode.window.showWarningMessage(
+            "⚠️ Failed to load trivy_report.json."
+          );
+        }
+      }
+
+      if (fs.existsSync(semgrepPath)) {
+        try {
+          semgrepFindings = JSON.parse(fs.readFileSync(semgrepPath, "utf-8"));
+        } catch (e) {
+          vscode.window.showWarningMessage(
+            "⚠️ Failed to load semgrep_report.json."
+          );
+        }
+      }
+
+      if (fs.existsSync(banditPath)) {
+        try {
+          banditFindings = JSON.parse(fs.readFileSync(banditPath, "utf-8"));
+        } catch (e) {
+          vscode.window.showWarningMessage(
+            "⚠️ Failed to load bandit_report.json."
+          );
+        }
+      }
+      let findings;
+      try {
+        const findingsRaw = fs.readFileSync(findingsPath, "utf-8");
+        findings = JSON.parse(findingsRaw);
+      } catch (e) {
+        vscode.window.showErrorMessage(
+          "❌ Failed to read or parse gitleaks_report.json."
+        );
+        return;
+      }
+
+      const reportPath = await generatePDFReport(findings, config, {
+        trivyFindings,
+        semgrepFindings,
+        banditFindings,
       });
-  });
+      // ✅ פתיחת הדוח לאחר יצירתו
+      vscode.window
+        .showInformationMessage(
+          "✅ PDF report generated successfully.",
+          "Open Report"
+        )
+        .then(async (selection) => {
+          if (selection === "Open Report") {
+            try {
+              const open = await import("open").then((mod) => mod.default);
+              await open(reportPath);
+            } catch (err) {
+              vscode.window.showErrorMessage(
+                `❌ Failed to open the report: ${err.message}`
+              );
+            }
+          }
+        });
+    }
+  );
 
   context.subscriptions.push(generatePdfCommand);
 
   // 🟩 כפתור בשורת הסטטוס
-  const pdfStatusBarButton = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-  pdfStatusBarButton.command = 'devsecode.generateCustomPDF';
-  pdfStatusBarButton.text = '$(file-pdf) Generate PDF Report';
-  pdfStatusBarButton.tooltip = 'Click to generate a custom PDF report';
+  const pdfStatusBarButton = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    100
+  );
+  pdfStatusBarButton.command = "devsecode.generateCustomPDF";
+  pdfStatusBarButton.text = "$(file-pdf) Generate PDF Report";
+  pdfStatusBarButton.tooltip = "Click to generate a custom PDF report";
   pdfStatusBarButton.show();
 
   context.subscriptions.push(pdfStatusBarButton);
@@ -389,7 +447,6 @@ function watchGitleaksReport(context) {
 
   context.subscriptions.push({ dispose: () => watcher.close() });
 }
-
 
 function showDiagnostics(findings) {
   const diagnosticCollection =
@@ -437,7 +494,6 @@ function showDiagnostics(findings) {
   });
 }
 
-
 function showDashboard(context, findings) {
   const panel = vscode.window.createWebviewPanel(
     "devsecDashboard",
@@ -450,7 +506,7 @@ function showDashboard(context, findings) {
   let html = fs.readFileSync(htmlPath, "utf8");
 
   const imagePath = vscode.Uri.file(
-    path.join(context.extensionPath, "UI","devsecode_logo.png")
+    path.join(context.extensionPath, "UI", "devsecode_logo.png")
   );
   const imageUri = panel.webview.asWebviewUri(imagePath);
 
@@ -470,7 +526,7 @@ function showDashboard(context, findings) {
     }
   }
 
-    // 📘 קריאת דוח Bandit
+  // 📘 קריאת דוח Bandit
   const banditReportPath = path.join(
     vscode.workspace.workspaceFolders?.[0].uri.fsPath || "",
     "bandit_report.json"
@@ -482,12 +538,12 @@ function showDashboard(context, findings) {
       const rawBandit = fs.readFileSync(banditReportPath, "utf8");
       banditData = JSON.parse(rawBandit);
     } catch (err) {
-      vscode.window.showWarningMessage("⚠️ Failed to parse bandit_report.json.");
+      vscode.window.showWarningMessage(
+        "⚠️ Failed to parse bandit_report.json."
+      );
       console.warn("Bandit parsing error:", err);
     }
   }
-
-
 
   // 🧠 הוספת שני הדוחות כסקריפטים לדף
   html = html
@@ -504,13 +560,16 @@ function showDashboard(context, findings) {
   panel.webview.html = html;
 }
 
-
 function openAlertBanner(alertItem) {
-  const vscode = require('vscode');
-  const path = require('path');
-  const fs = require('fs');
+  const vscode = require("vscode");
+  const path = require("path");
+  const fs = require("fs");
 
-  const id = alertItem.RuleID || alertItem.VulnerabilityID || alertItem.test_name || "Unknown";
+  const id =
+    alertItem.RuleID ||
+    alertItem.VulnerabilityID ||
+    alertItem.test_name ||
+    "Unknown";
   const panelTitle = `Alert: ${id}`;
 
   const alertPanel = vscode.window.createWebviewPanel(
@@ -526,33 +585,45 @@ function openAlertBanner(alertItem) {
   const htmlPath = path.join(__dirname, "UI", "alertpage.html");
   let html = fs.readFileSync(htmlPath, "utf8");
 
-  
   let reportData = [];
 
   if (alertItem.VulnerabilityID) {
-      // Trivy
-      if (typeof currentTrivyFindings !== "undefined" && currentTrivyFindings.Results) {
-          reportData = currentTrivyFindings.Results.flatMap(result => result.Vulnerabilities || []);
-      }
-  } else if (alertItem.test_name || alertItem.issue_text || alertItem.issue_severity) {
-      // Bandit
-      if (typeof currentBanditFindings !== "undefined" && Array.isArray(currentBanditFindings)) {
-          reportData = currentBanditFindings;
-      }
+    // Trivy
+    if (
+      typeof currentTrivyFindings !== "undefined" &&
+      currentTrivyFindings.Results
+    ) {
+      reportData = currentTrivyFindings.Results.flatMap(
+        (result) => result.Vulnerabilities || []
+      );
+    }
+  } else if (
+    alertItem.test_name ||
+    alertItem.issue_text ||
+    alertItem.issue_severity
+  ) {
+    // Bandit
+    if (
+      typeof currentBanditFindings !== "undefined" &&
+      Array.isArray(currentBanditFindings)
+    ) {
+      reportData = currentBanditFindings;
+    }
   } else {
-      // Gitleaks
-      if (typeof currentFindings !== "undefined") {
-          reportData = currentFindings;
-      }
+    // Gitleaks
+    if (typeof currentFindings !== "undefined") {
+      reportData = currentFindings;
+    }
   }
 
-
-  
-
   // שים לב, לשלב גם נתיב קובץ של האלרט אם קיים (ל-Gitleaks או Trivy)
-  const filePath = alertItem.FilePath || (alertItem.Location && alertItem.Location.Path) || alertItem.filename || "";
+  const filePath =
+    alertItem.FilePath ||
+    (alertItem.Location && alertItem.Location.Path) ||
+    alertItem.filename ||
+    "";
   const startLine = alertItem.StartLine || alertItem.line_number || 0;
-  
+
   html = html.replace(
     "</head>",
     `<script>
@@ -567,16 +638,16 @@ function openAlertBanner(alertItem) {
   alertPanel.webview.html = html;
 
   alertPanel.webview.onDidReceiveMessage(
-    message => {
+    (message) => {
       if (message.command === "goToLine") {
         const { filePath, lineNumber } = message;
         if (filePath && lineNumber) {
           const uri = vscode.Uri.file(filePath);
-          vscode.workspace.openTextDocument(uri).then(doc => {
+          vscode.workspace.openTextDocument(uri).then((doc) => {
             vscode.window.showTextDocument(doc, {
               selection: new vscode.Range(
                 new vscode.Position(lineNumber - 1, 0),
-                new vscode.Position(lineNumber - 1,Number.MAX_SAFE_INTEGER)
+                new vscode.Position(lineNumber - 1, Number.MAX_SAFE_INTEGER)
               ),
             });
           });
@@ -588,15 +659,47 @@ function openAlertBanner(alertItem) {
   );
 }
 
-
 function deactivate() {}
+function attachLinesToTrivy(trivyReportPath, requirementsPath) {
+  if (!fs.existsSync(trivyReportPath) || !fs.existsSync(requirementsPath)) {
+    console.warn("Trivy report or requirements.txt not found.");
+    return;
+  }
+
+  const report = JSON.parse(fs.readFileSync(trivyReportPath, "utf8"));
+  const lines = fs.readFileSync(requirementsPath, "utf8").split("\n");
+
+  const lineMap = {};
+  lines.forEach((line, idx) => {
+    const pkg = line.split("==")[0].trim().toLowerCase();
+    if (pkg) {
+      lineMap[pkg] = idx + 1;
+    }
+  });
+
+  for (const result of report.Results || []) {
+    for (const vuln of result.Vulnerabilities || []) {
+      const pkg = vuln.PkgName?.toLowerCase();
+      if (pkg && lineMap[pkg]) {
+        vuln.line_number = lineMap[pkg];
+      }
+    }
+  }
+
+  fs.writeFileSync(trivyReportPath, JSON.stringify(report, null, 2));
+  console.log("✅ Line numbers added to Trivy report.");
+}
 
 class AlertsProvider {
   constructor(context) {
     this.context = context;
 
     // אפשר לשמור קבצי דיווח כאן אם צריך, או להוריד את זה אם לא בשימוש
-    this.reportPath = path.join(context.extensionPath, "UI", "gitleaks_report.json");
+    this.reportPath = path.join(
+      context.extensionPath,
+      "UI",
+      "gitleaks_report.json"
+    );
 
     this._onDidChangeTreeData = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -611,11 +714,12 @@ class AlertsProvider {
   }
 
   getChildren() {
-   
     const combinedFindings = [
       ...(currentFindings || []),
-      ...(currentTrivyFindings?.Results?.flatMap(r => r.Vulnerabilities || []) || []),
-      ...(currentBanditFindings || [])
+      ...(currentTrivyFindings?.Results?.flatMap(
+        (r) => r.Vulnerabilities || []
+      ) || []),
+      ...(currentBanditFindings || []),
     ];
 
     if (combinedFindings.length === 0) {
@@ -627,7 +731,7 @@ class AlertsProvider {
       High: 1,
       Medium: 2,
       Low: 3,
-      Unknown: 4
+      Unknown: 4,
     };
 
     // פונקציה אחידה להערכת חומרה לפי מאפיינים שונים בממצאים השונים
@@ -673,12 +777,18 @@ class AlertsProvider {
 
     // פונקציה אחידה לאיתור שורה בקובץ (אם יש)
     function getLine(item) {
-      return item.StartLine || item.Location?.StartLine || item.Line || item.line_number || "none";
+      return (
+        item.StartLine ||
+        item.Location?.StartLine ||
+        item.Line ||
+        item.line_number ||
+        "none"
+      );
     }
 
     // ממפים וממיינים
     const sortedFindings = combinedFindings
-      .map(item => ({
+      .map((item) => ({
         ...item,
         severity: getSeverity(item),
         alertId: getAlertId(item),
@@ -687,11 +797,17 @@ class AlertsProvider {
       .sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
 
     return Promise.resolve(
-      sortedFindings.map(item => {
+      sortedFindings.map((item) => {
         const label = `${item.alertId}: Line ${item.line}`;
-        const desc = item.Description || item.Title || item.Message || item.issue_text || "No description";
+        const desc =
+          item.Description ||
+          item.Title ||
+          item.Message ||
+          item.issue_text ||
+          "No description";
         const severity = item.severity || item.issue_severity;
-        const filePath = item.File || item.Path || item.filename|| item.Location?.Path || "";
+        const filePath =
+          item.File || item.Path || item.filename || item.Location?.Path || "";
         item.FilePath = filePath;
         const alertItem = new vscode.TreeItem(
           label,
@@ -714,7 +830,6 @@ class AlertsProvider {
     );
   }
 }
-
 
 module.exports = {
   activate,
