@@ -249,6 +249,29 @@ function activate(context) {
       });
     }
   );
+  vscode.languages.registerCodeActionsProvider("*", {
+    provideCodeActions(document, range, context) {
+      const actions = [];
+
+      for (const diagnostic of context.diagnostics) {
+        if (diagnostic.source === "Secret Scanner") {
+          const fix = new vscode.CodeAction(
+            "🛡 Remove hardcoded secret",
+            vscode.CodeActionKind.QuickFix
+          );
+          fix.diagnostics = [diagnostic];
+          fix.command = {
+            title: "Remove and explain",
+            command: "devsecode.removeSecretLine",
+            arguments: [document, diagnostic.range],
+          };
+          actions.push(fix);
+        }
+      }
+
+      return actions;
+    },
+  });
 
   context.subscriptions.push(disposable);
 
@@ -258,6 +281,43 @@ function activate(context) {
       openAlertBanner(item);
     }
   );
+  const removeSecretCommand = vscode.commands.registerCommand(
+    "devsecode.removeSecretLine",
+    async (document, range) => {
+      const fullLineRange = new vscode.Range(
+        new vscode.Position(range.start.line, 0),
+        new vscode.Position(range.start.line + 1, 0)
+      );
+
+      const lineText = document.getText(fullLineRange);
+
+      const edit = new vscode.WorkspaceEdit();
+      edit.delete(document.uri, fullLineRange);
+      await vscode.workspace.applyEdit(edit);
+
+      const choice = await vscode.window.showWarningMessage(
+        "⚠️ The line was removed because it contained a hardcoded secret.\n" +
+          "To securely manage secrets in your code:\n" +
+          "✅ Use environment variables (e.g., process.env.MY_SECRET)\n" +
+          "✅ Or a secure secret manager (e.g., GitHub Secrets, AWS Secrets Manager, Vault)",
+        "Undo removal"
+      );
+
+      if (choice === "Undo removal") {
+        const undoEdit = new vscode.WorkspaceEdit();
+        undoEdit.insert(
+          document.uri,
+          new vscode.Position(range.start.line, 0),
+          lineText
+        );
+        await vscode.workspace.applyEdit(undoEdit);
+        vscode.window.showInformationMessage("✅ Secret line restored.");
+      }
+    }
+  );
+  context.subscriptions.push(removeSecretCommand);
+
+  context.subscriptions.push(removeSecretCommand);
 
   context.subscriptions.push(openAlertBannerCommand);
   const generatePdfCommand = vscode.commands.registerCommand(
@@ -453,6 +513,23 @@ function showDiagnostics(findings) {
     vscode.languages.createDiagnosticCollection("secretScanner");
   const diagnosticsMap = new Map();
 
+  // 🧠 Map Severity to VSCode DiagnosticSeverity
+  function mapSeverity(severityStr) {
+    const severity = (severityStr || "").toLowerCase();
+    switch (severity) {
+      case "critical":
+        return vscode.DiagnosticSeverity.Error;
+      case "high":
+        return vscode.DiagnosticSeverity.Warning;
+      case "medium":
+        return vscode.DiagnosticSeverity.Information;
+      case "low":
+        return vscode.DiagnosticSeverity.Hint;
+      default:
+        return vscode.DiagnosticSeverity.Information;
+    }
+  }
+
   findings.forEach((finding) => {
     const fileUri = vscode.Uri.file(finding.File);
     const line = finding.StartLine ? finding.StartLine - 1 : 0;
@@ -461,6 +538,18 @@ function showDiagnostics(findings) {
       new vscode.Position(line, 80)
     );
 
+    // 🛡️ Default to Critical if severity is missing
+    if (!finding.Severity) {
+      finding.Severity = "Critical";
+    }
+
+    const severity = mapSeverity(finding.Severity);
+
+    const message = `🚨 EXPOSED SECRET DETECTED!
+This line contains a hardcoded secret.
+Secrets should NEVER be committed to source code.
+Use environment variables or secret managers instead.`;
+
     const tooltip = [
       `Rule: ${finding.RuleID}`,
       `Description: ${finding.Description || "Potential secret detected."}`,
@@ -468,14 +557,8 @@ function showDiagnostics(findings) {
       finding.redacted ? "(Secret redacted)" : "",
     ].join("\n");
 
-    const message = `${finding.RuleID}: ${
-      finding.Description || "Potential secret detected."
-    }`;
-    const diagnostic = new vscode.Diagnostic(
-      range,
-      message,
-      vscode.DiagnosticSeverity.Warning
-    );
+    const diagnostic = new vscode.Diagnostic(range, message, severity);
+
     diagnostic.source = "Secret Scanner";
     diagnostic.code = finding.RuleID;
     diagnostic.relatedInformation = [
