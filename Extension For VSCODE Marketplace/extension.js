@@ -3,9 +3,7 @@ const cp = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
-const {
-  generateContainerReports,
-} = require("./utils/containerReport"); // 🆕 helper to create JSON
+const { generateContainerReports } = require("./utils/containerReport"); // 🆕 helper to create JSON
 
 let alertsProvider;
 let currentFindings = [];
@@ -114,7 +112,7 @@ function activate(context) {
                       "No secrets found in scan."
                     );
                   } else {
-                    showDiagnostics(findings);
+                    showDiagnostics(findings, context);
                   }
 
                   vscode.window.showInformationMessage(
@@ -176,7 +174,8 @@ function activate(context) {
 
                       // Ask for container image or "all"
                       const containerImage = await vscode.window.showInputBox({
-                        placeHolder: "e.g., nginx:1.25-alpine   •   or type 'all' to scan every image in repo",
+                        placeHolder:
+                          "e.g., nginx:1.25-alpine   •   or type 'all' to scan every image in repo",
                         prompt:
                           "Enter the Docker image you want to scan (or 'all' to scan every image referenced in your project)",
                       });
@@ -330,76 +329,77 @@ function activate(context) {
       return actions;
     },
   });
-  
+
   function collectImages(rootPath) {
-  const images = new Set();
+    const images = new Set();
 
-  const add = (img) => {
-    if (img && !img.startsWith("${")) images.add(img.trim());
-  };
+    const add = (img) => {
+      if (img && !img.startsWith("${")) images.add(img.trim());
+    };
 
-  // 1. All *.yaml / *.yml (docker-compose, k8s)
-  glob.sync("**/*.{yaml,yml}", { cwd: rootPath, nodir: true }).forEach((f) => {
-    const text = fs.readFileSync(path.join(rootPath, f), "utf8");
-    const re = /image:\s*["']?([^"'\s#]+)(?=["'\s#]|$)/gi;
-    let m;
-    while ((m = re.exec(text))) add(m[1]);
-  });
+    // 1. All *.yaml / *.yml (docker-compose, k8s)
+    glob
+      .sync("**/*.{yaml,yml}", { cwd: rootPath, nodir: true })
+      .forEach((f) => {
+        const text = fs.readFileSync(path.join(rootPath, f), "utf8");
+        const re = /image:\s*["']?([^"'\s#]+)(?=["'\s#]|$)/gi;
+        let m;
+        while ((m = re.exec(text))) add(m[1]);
+      });
 
-  // 2. Any file named *Dockerfile*  – look for BOTH  “FROM …” and “image: …”
-  glob.sync("**/Dockerfile*", { cwd: rootPath, nodir: true }).forEach((f) => {
-    const text = fs.readFileSync(path.join(rootPath, f), "utf8");
-    text.split(/\r?\n/).forEach((line) => {
-      const from = line.match(/^\s*FROM\s+([^\s]+).*$/i);
-      if (from) add(from[1]);
+    // 2. Any file named *Dockerfile*  – look for BOTH  “FROM …” and “image: …”
+    glob.sync("**/Dockerfile*", { cwd: rootPath, nodir: true }).forEach((f) => {
+      const text = fs.readFileSync(path.join(rootPath, f), "utf8");
+      text.split(/\r?\n/).forEach((line) => {
+        const from = line.match(/^\s*FROM\s+([^\s]+).*$/i);
+        if (from) add(from[1]);
 
-      const img = line.match(/image:\s*["']?([^"'\s#]+)(?=["'\s#]|$)/i);
-      if (img) add(img[1]);
+        const img = line.match(/image:\s*["']?([^"'\s#]+)(?=["'\s#]|$)/i);
+        if (img) add(img[1]);
+      });
     });
-  });
 
-  return Array.from(images);
-}
+    return Array.from(images);
+  }
 
+  // ---------------------------------------------------------------------------
+  // Helper to run container image scan (unchanged except for safeName)
+  // ---------------------------------------------------------------------------
+  async function runContainerScan(imageName, rootPath, trivyConfigToUse) {
+    const safeName = imageName.replace(/[^a-zA-Z0-9_.-]/g, "_");
+    const imageReportPath = path.join(rootPath, `trivy_image_${safeName}.json`);
+    const trivyImageCommand = trivyConfigToUse
+      ? `trivy image "${imageName}" --config "${trivyConfigToUse}" --format json --output "${imageReportPath}"`
+      : `trivy image "${imageName}" --format json --output "${imageReportPath}"`;
 
-// ---------------------------------------------------------------------------
-// Helper to run container image scan (unchanged except for safeName)
-// ---------------------------------------------------------------------------
-async function runContainerScan(imageName, rootPath, trivyConfigToUse) {
-  const safeName = imageName.replace(/[^a-zA-Z0-9_.-]/g, "_");
-  const imageReportPath = path.join(rootPath, `trivy_image_${safeName}.json`);
-  const trivyImageCommand = trivyConfigToUse
-    ? `trivy image "${imageName}" --config "${trivyConfigToUse}" --format json --output "${imageReportPath}"`
-    : `trivy image "${imageName}" --format json --output "${imageReportPath}"`;
+    return new Promise((resolve) => {
+      cp.exec(trivyImageCommand, { maxBuffer: 1024 * 1000 }, (err) => {
+        if (err) {
+          vscode.window.showErrorMessage(
+            `Container scan failed for ${imageName}. Ensure Trivy is installed and Docker is running.`
+          );
+          return resolve();
+        }
 
-  return new Promise((resolve) => {
-    cp.exec(trivyImageCommand, { maxBuffer: 1024 * 1000 }, (err) => {
-      if (err) {
-        vscode.window.showErrorMessage(
-          `Container scan failed for ${imageName}. Ensure Trivy is installed and Docker is running.`
-        );
-        return resolve();
-      }
+        let containerData = {};
+        try {
+          containerData = JSON.parse(fs.readFileSync(imageReportPath, "utf8"));
+          vscode.window.showInformationMessage(
+            `✅ Container scan for ${imageName} completed.`
+          );
+        } catch {
+          vscode.window.showWarningMessage(
+            `⚠️ Failed to parse Trivy report for ${imageName}.`
+          );
+        }
 
-      let containerData = {};
-      try {
-        containerData = JSON.parse(fs.readFileSync(imageReportPath, "utf8"));
-        vscode.window.showInformationMessage(
-          `✅ Container scan for ${imageName} completed.`
-        );
-      } catch {
-        vscode.window.showWarningMessage(
-          `⚠️ Failed to parse Trivy report for ${imageName}.`
-        );
-      }
-
-      currentContainerFindings =
-        containerData.Results?.flatMap((r) => r.Vulnerabilities || []) || [];
-      currentContainerFindings._rawImageReport = containerData;
-      resolve();
+        currentContainerFindings =
+          containerData.Results?.flatMap((r) => r.Vulnerabilities || []) || [];
+        currentContainerFindings._rawImageReport = containerData;
+        resolve();
+      });
     });
-  });
-}
+  }
   context.subscriptions.push(disposable);
 
   let openAlertBannerCommand = vscode.commands.registerCommand(
@@ -635,62 +635,107 @@ function watchGitleaksReport(context) {
   context.subscriptions.push({ dispose: () => watcher.close() });
 }
 
-function showDiagnostics(findings) {
+// function showDiagnostics(findings) {
+//   const diagnosticCollection =
+//     vscode.languages.createDiagnosticCollection("secretScanner");
+//   const diagnosticsMap = new Map();
+
+//   // 🧠 Map Severity to VSCode DiagnosticSeverity
+//   function mapSeverity(severityStr) {
+//     const severity = (severityStr || "").toLowerCase();
+//     switch (severity) {
+//       case "critical":
+//         return vscode.DiagnosticSeverity.Error;
+//       case "high":
+//         return vscode.DiagnosticSeverity.Warning;
+//       case "medium":
+//         return vscode.DiagnosticSeverity.Information;
+//       case "low":
+//         return vscode.DiagnosticSeverity.Hint;
+//       default:
+//         return vscode.DiagnosticSeverity.Information;
+//     }
+//   }
+
+//   findings.forEach((finding) => {
+//     const fileUri = vscode.Uri.file(finding.File);
+//     const line = finding.StartLine ? finding.StartLine - 1 : 0;
+//     const range = new vscode.Range(
+//       new vscode.Position(line, 0),
+//       new vscode.Position(line, 80)
+//     );
+
+//     // 🛡️ Default to Critical if severity is missing
+//     if (!finding.Severity) {
+//       finding.Severity = "Critical";
+//     }
+
+//     const severity = mapSeverity(finding.Severity);
+
+//     const message = `🚨 Hardcoded Secret Detected
+// • Rule: ${finding.RuleID}
+// • Description: ${finding.Description || "Potential secret detected."}
+// ${finding.redacted ? "• Secret was redacted" : ""}
+
+// ⚠️ Secrets should NEVER be committed to source code.
+// Use environment variables or a secret manager instead.`;
+
+//     const tooltip = [
+//       `Rule: ${finding.RuleID}`,
+//       `Description: ${finding.Description || "Potential secret detected."}`,
+//       finding.Secret ? `Secret: ${finding.Secret}` : "",
+//       finding.redacted ? "(Secret redacted)" : "",
+//     ].join("\n");
+
+//     const diagnostic = new vscode.Diagnostic(range, message, severity);
+
+//     diagnostic.source = "Secret Scanner";
+//     diagnostic.code = finding.RuleID;
+//     diagnostic.relatedInformation = [
+//       new vscode.DiagnosticRelatedInformation(fileUri, tooltip),
+//     ];
+
+//     if (!diagnosticsMap.has(fileUri)) {
+//       diagnosticsMap.set(fileUri, []);
+//     }
+//     diagnosticsMap.get(fileUri).push(diagnostic);
+//   });
+
+//   diagnosticCollection.clear();
+//   diagnosticsMap.forEach((diags, uri) => {
+//     diagnosticCollection.set(uri, diags);
+//   });
+// }
+
+function showDiagnostics(findings, context) {
   const diagnosticCollection =
     vscode.languages.createDiagnosticCollection("secretScanner");
-  const diagnosticsMap = new Map();
+  context.subscriptions.push(diagnosticCollection); // ✅ חובה!
 
-  // 🧠 Map Severity to VSCode DiagnosticSeverity
-  function mapSeverity(severityStr) {
-    const severity = (severityStr || "").toLowerCase();
-    switch (severity) {
-      case "critical":
-        return vscode.DiagnosticSeverity.Error;
-      case "high":
-        return vscode.DiagnosticSeverity.Warning;
-      case "medium":
-        return vscode.DiagnosticSeverity.Information;
-      case "low":
-        return vscode.DiagnosticSeverity.Hint;
-      default:
-        return vscode.DiagnosticSeverity.Information;
-    }
-  }
+  const diagnosticsMap = new Map();
 
   findings.forEach((finding) => {
     const fileUri = vscode.Uri.file(finding.File);
     const line = finding.StartLine ? finding.StartLine - 1 : 0;
     const range = new vscode.Range(
       new vscode.Position(line, 0),
-      new vscode.Position(line, 80)
+      new vscode.Position(line, 100)
     );
 
-    // 🛡️ Default to Critical if severity is missing
-    if (!finding.Severity) {
-      finding.Severity = "Critical";
-    }
+    const message = `🚨 Hardcoded Secret Detected
+• Rule: ${finding.RuleID}
+• Description: ${finding.Description || "Potential secret detected."}
+${finding.redacted ? "• Secret was redacted" : ""}
 
-    const severity = mapSeverity(finding.Severity);
-
-    const message = `🚨 EXPOSED SECRET DETECTED!
-This line contains a hardcoded secret.
-Secrets should NEVER be committed to source code.
+⚠️ Secrets should NEVER be committed to source code.
 Use environment variables or secret managers instead.`;
 
-    const tooltip = [
-      `Rule: ${finding.RuleID}`,
-      `Description: ${finding.Description || "Potential secret detected."}`,
-      finding.Secret ? `Secret: ${finding.Secret}` : "",
-      finding.redacted ? "(Secret redacted)" : "",
-    ].join("\n");
-
-    const diagnostic = new vscode.Diagnostic(range, message, severity);
-
+    const diagnostic = new vscode.Diagnostic(
+      range,
+      message,
+      vscode.DiagnosticSeverity.Error
+    );
     diagnostic.source = "Secret Scanner";
-    diagnostic.code = finding.RuleID;
-    diagnostic.relatedInformation = [
-      new vscode.DiagnosticRelatedInformation(fileUri, tooltip),
-    ];
 
     if (!diagnosticsMap.has(fileUri)) {
       diagnosticsMap.set(fileUri, []);
