@@ -3,12 +3,16 @@ const cp = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
+const {
+  generateContainerReports,
+} = require("./utils/containerReport"); // 🆕 helper to create JSON
 
 let alertsProvider;
 let currentFindings = [];
 let alertPanel;
 let currentTrivyFindings = [];
 let currentBanditFindings = [];
+let currentContainerFindings = []; // 🆕 container image scan findings
 
 function activate(context) {
   alertsProvider = new AlertsProvider(context);
@@ -120,7 +124,7 @@ function activate(context) {
                   cp.exec(
                     trivyCommand,
                     { maxBuffer: 1024 * 1000 },
-                    (trivyErr) => {
+                    async (trivyErr) => {
                       if (trivyErr) {
                         vscode.window.showErrorMessage(
                           "Trivy scan failed. Ensure Trivy is installed and configured properly."
@@ -168,6 +172,60 @@ function activate(context) {
                         );
                       } catch (e) {
                         currentTrivyFindings = [];
+                      }
+
+                      // Ask for container image or "all"
+                      const containerImage = await vscode.window.showInputBox({
+                        placeHolder: "e.g., nginx:1.25-alpine   •   or type 'all' to scan every image in repo",
+                        prompt:
+                          "Enter the Docker image you want to scan (or 'all' to scan every image referenced in your project)",
+                      });
+
+                      if (containerImage) {
+                        if (containerImage.trim().toLowerCase() === "all") {
+                          const images = collectImages(rootPath);
+                          if (images.length === 0) {
+                            vscode.window.showWarningMessage(
+                              "No container images found in repository files."
+                            );
+                          } else {
+                            for (const img of images) {
+                              await runContainerScan(
+                                img,
+                                rootPath,
+                                trivyConfigToUse
+                              );
+                              if (currentContainerFindings.length) {
+                                await generateContainerReports(
+                                  img,
+                                  currentContainerFindings,
+                                  rootPath
+                                );
+                              }
+                              // reset for next image
+                              currentContainerFindings = [];
+                            }
+                            vscode.window.showInformationMessage(
+                              `📄 Container scans complete for ${images.length} images.`
+                            );
+                          }
+                        } else {
+                          await runContainerScan(
+                            containerImage,
+                            rootPath,
+                            trivyConfigToUse
+                          );
+                          if (currentContainerFindings.length) {
+                            generateContainerReports(
+                              containerImage,
+                              currentContainerFindings,
+                              rootPath
+                            );
+                            vscode.window.showInformationMessage(
+                              "📄 ContainerScanning_Report.json generated!"
+                            );
+                          }
+                        }
                       }
 
                       const banditReportPath = path.join(
@@ -272,7 +330,76 @@ function activate(context) {
       return actions;
     },
   });
+  
+  function collectImages(rootPath) {
+  const images = new Set();
 
+  const add = (img) => {
+    if (img && !img.startsWith("${")) images.add(img.trim());
+  };
+
+  // 1. All *.yaml / *.yml (docker-compose, k8s)
+  glob.sync("**/*.{yaml,yml}", { cwd: rootPath, nodir: true }).forEach((f) => {
+    const text = fs.readFileSync(path.join(rootPath, f), "utf8");
+    const re = /image:\s*["']?([^"'\s#]+)(?=["'\s#]|$)/gi;
+    let m;
+    while ((m = re.exec(text))) add(m[1]);
+  });
+
+  // 2. Any file named *Dockerfile*  – look for BOTH  “FROM …” and “image: …”
+  glob.sync("**/Dockerfile*", { cwd: rootPath, nodir: true }).forEach((f) => {
+    const text = fs.readFileSync(path.join(rootPath, f), "utf8");
+    text.split(/\r?\n/).forEach((line) => {
+      const from = line.match(/^\s*FROM\s+([^\s]+).*$/i);
+      if (from) add(from[1]);
+
+      const img = line.match(/image:\s*["']?([^"'\s#]+)(?=["'\s#]|$)/i);
+      if (img) add(img[1]);
+    });
+  });
+
+  return Array.from(images);
+}
+
+
+// ---------------------------------------------------------------------------
+// Helper to run container image scan (unchanged except for safeName)
+// ---------------------------------------------------------------------------
+async function runContainerScan(imageName, rootPath, trivyConfigToUse) {
+  const safeName = imageName.replace(/[^a-zA-Z0-9_.-]/g, "_");
+  const imageReportPath = path.join(rootPath, `trivy_image_${safeName}.json`);
+  const trivyImageCommand = trivyConfigToUse
+    ? `trivy image "${imageName}" --config "${trivyConfigToUse}" --format json --output "${imageReportPath}"`
+    : `trivy image "${imageName}" --format json --output "${imageReportPath}"`;
+
+  return new Promise((resolve) => {
+    cp.exec(trivyImageCommand, { maxBuffer: 1024 * 1000 }, (err) => {
+      if (err) {
+        vscode.window.showErrorMessage(
+          `Container scan failed for ${imageName}. Ensure Trivy is installed and Docker is running.`
+        );
+        return resolve();
+      }
+
+      let containerData = {};
+      try {
+        containerData = JSON.parse(fs.readFileSync(imageReportPath, "utf8"));
+        vscode.window.showInformationMessage(
+          `✅ Container scan for ${imageName} completed.`
+        );
+      } catch {
+        vscode.window.showWarningMessage(
+          `⚠️ Failed to parse Trivy report for ${imageName}.`
+        );
+      }
+
+      currentContainerFindings =
+        containerData.Results?.flatMap((r) => r.Vulnerabilities || []) || [];
+      currentContainerFindings._rawImageReport = containerData;
+      resolve();
+    });
+  });
+}
   context.subscriptions.push(disposable);
 
   let openAlertBannerCommand = vscode.commands.registerCommand(
