@@ -4,6 +4,8 @@ const path = require("path");
 const fs = require("fs");
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
 const { generateContainerReports } = require("./utils/containerReport"); // 🆕 helper to create JSON
+const { runDastScan } = require("./dastScan");
+
 
 let alertsProvider;
 let currentFindings = [];
@@ -292,6 +294,8 @@ function activate(context) {
                           currentBanditFindings = [];
                         }
 
+                        await runDastScan(rootPath);
+
                         showDashboard(context, findings);
                         alertsProvider.refresh();
                         resolve(); // ✅ מסיים את הספינר של VS Code
@@ -306,6 +310,80 @@ function activate(context) {
       });
     }
   );
+
+  
+// 🔒 DAST integration directly embedded into DevSecode Extension
+// This is a standalone function based on the logic of dast.py, rewritten in Node.js to be part of the extension.
+
+const runDastScan = async (rootPath) => {
+  const vscode = require("vscode");
+  const path = require("path");
+  const fs = require("fs");
+  const axios = require("axios");
+
+  const ZAP_API = "http://127.0.0.1:8080";
+  const target = "http://localhost:5000";
+
+  vscode.window.showInformationMessage("🔍 Starting embedded DAST scan...");
+
+  try {
+    // Spidering
+    const spiderStart = await axios.get(`${ZAP_API}/JSON/spider/action/scan/`, {
+      params: { url: target }
+    });
+    const scanId = spiderStart.data.scan;
+
+    let status = "0";
+    while (status !== "100") {
+      await new Promise((r) => setTimeout(r, 2000));
+      const progress = await axios.get(`${ZAP_API}/JSON/spider/view/status/`, {
+        params: { scanId }
+      });
+      status = progress.data.status;
+    }
+
+    // Wait for passive scan
+    let recordsToScan = 1;
+    while (recordsToScan > 0) {
+      await new Promise((r) => setTimeout(r, 2000));
+      const scanView = await axios.get(`${ZAP_API}/JSON/pscan/view/recordsToScan/`);
+      recordsToScan = parseInt(scanView.data.recordsToScan);
+    }
+
+    // Active scan
+    const ascanStart = await axios.get(`${ZAP_API}/JSON/ascan/action/scan/`, {
+      params: { url: target }
+    });
+    const ascanId = ascanStart.data.scan;
+
+    let ascanStatus = "0";
+    while (ascanStatus !== "100") {
+      await new Promise((r) => setTimeout(r, 5000));
+      const progress = await axios.get(`${ZAP_API}/JSON/ascan/view/status/`, {
+        params: { scanId: ascanId }
+      });
+      ascanStatus = progress.data.status;
+    }
+
+    // Fetch alerts
+    const alertRes = await axios.get(`${ZAP_API}/JSON/core/view/alerts/`);
+    const alerts = alertRes.data.alerts;
+
+    const outputDir = path.join(rootPath, "UI", "json_output");
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    const outputPath = path.join(outputDir, "zap_scan_results.json");
+    fs.writeFileSync(outputPath, JSON.stringify(alerts, null, 2));
+
+    vscode.window.showInformationMessage("✅ DAST scan completed and report saved.");
+  } catch (err) {
+    vscode.window.showWarningMessage("⚠️ DAST scan failed.");
+    console.error("DAST error:", err);
+  }
+};
+
+module.exports.runDastScan = runDastScan;
+
   vscode.languages.registerCodeActionsProvider("*", {
     provideCodeActions(document, range, context) {
       const actions = [];
@@ -1090,3 +1168,5 @@ module.exports = {
   activate,
   deactivate,
 };
+
+
