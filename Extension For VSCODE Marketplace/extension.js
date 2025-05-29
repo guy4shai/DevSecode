@@ -381,8 +381,9 @@ function activate(context) {
     console.error("DAST error:", err);
   }
 };
-*/
+
 module.exports.runDastScan = runDastScan;
+*/
 
   vscode.languages.registerCodeActionsProvider("*", {
     provideCodeActions(document, range, context) {
