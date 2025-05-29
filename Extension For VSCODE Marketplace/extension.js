@@ -4,7 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
 const { generateContainerReports } = require("./utils/containerReport"); // 🆕 helper to create JSON
-const { runDastScan } = require("./dastScan");
+// const { runDastScan } = require("./dastScan");
 
 
 let alertsProvider;
@@ -294,7 +294,7 @@ function activate(context) {
                           currentBanditFindings = [];
                         }
 
-                        await runDastScan(rootPath);
+                      //  await runDastScan(rootPath);
 
                         showDashboard(context, findings);
                         alertsProvider.refresh();
@@ -315,7 +315,7 @@ function activate(context) {
 // 🔒 DAST integration directly embedded into DevSecode Extension
 // This is a standalone function based on the logic of dast.py, rewritten in Node.js to be part of the extension.
 
-const runDastScan = async (rootPath) => {
+/* const runDastScan = async (rootPath) => {
   const vscode = require("vscode");
   const path = require("path");
   const fs = require("fs");
@@ -381,7 +381,7 @@ const runDastScan = async (rootPath) => {
     console.error("DAST error:", err);
   }
 };
-
+*/
 module.exports.runDastScan = runDastScan;
 
   vscode.languages.registerCodeActionsProvider("*", {
