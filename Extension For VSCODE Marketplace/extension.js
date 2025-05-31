@@ -295,7 +295,10 @@ function activate(context) {
                         }
 
                       //  await runDastScan(rootPath);
-
+                        vscode.commands.registerCommand("DevSecode.showDashboard", () => {
+                          showDashboard(context, findings);
+                        });
+                        
                         showDashboard(context, findings);
                         alertsProvider.refresh();
                         resolve(); // ✅ מסיים את הספינר של VS Code
@@ -676,6 +679,22 @@ module.exports.runDastScan = runDastScan;
   pdfStatusBarButton.show();
 
   context.subscriptions.push(pdfStatusBarButton);
+
+  const dashboardStatusBarButton = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    99
+  );
+  dashboardStatusBarButton.command = "DevSecode.showDashboard";
+  dashboardStatusBarButton.text = "$(dashboard) Open Dashboard";
+  dashboardStatusBarButton.tooltip = "Click to open the DevSecode Dashboard";
+  dashboardStatusBarButton.show();
+
+  context.subscriptions.push(dashboardStatusBarButton);
+
+  
+
+
+
 }
 
 function watchGitleaksReport(context) {
@@ -954,8 +973,7 @@ function openAlertBanner(alertItem) {
   const filePath =
     alertItem.FilePath ||
     (alertItem.Location && alertItem.Location.Path) ||
-    alertItem.filename ||
-    "";
+    alertItem.filename || "";
   const startLine = alertItem.StartLine || alertItem.line_number || 0;
 
   html = html.replace(
