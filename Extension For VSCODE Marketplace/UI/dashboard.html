@@ -185,7 +185,6 @@
     </div>
     
     <script>
-      
 
       function fetchData() {
         if (typeof reportData !== "undefined") {
@@ -276,6 +275,7 @@
           {
             type: "doughnut",
             data: {
+              labels: typeLabels,
               datasets: [
                 {
                   data: Object.values(types),
@@ -283,8 +283,23 @@
                 },
               ],
             },
+            options: {
+              plugins: {
+                legend: {
+                  display: false,           
+                },
+                tooltip: {
+                  callbacks: {
+                    label: function(context) {
+                      return " Quantity: " + context.parsed;
+                    },
+                  },
+                },
+              },
+            },
           }
         );
+
 
         new Chart(document.getElementById("severityChart").getContext("2d"), {
           type: "doughnut",
@@ -376,14 +391,28 @@
         new Chart(document.getElementById("scaTypeChart").getContext("2d"), {
           type: "doughnut",
           data: {
-            datasets: [
-              {
-                data: idCounts,
-                backgroundColor: idColors,
-              },
-            ],
+            labels: idLabels, 
+            datasets: [{
+              data: idCounts,
+              backgroundColor: idColors,
+            }]
           },
+          options: {
+            plugins: {
+              legend: {
+                display: false,  
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return " Quantity: " + context.parsed;
+                  }
+                }
+              }
+            }
+          }
         });
+
 
         new Chart(document.getElementById("scaSeverityChart").getContext("2d"), {
           type: "doughnut",
@@ -474,6 +503,7 @@
         new Chart(document.getElementById("banditTypeChart").getContext("2d"), {
           type: "doughnut",
           data: {
+            labels: typeLabels,  // שמות החולשות ל-tooltip
             datasets: [
               {
                 data: typeCounts,
@@ -481,7 +511,22 @@
               },
             ],
           },
+          options: {
+            plugins: {
+              legend: {
+                display: false,  // לבטל את ה-Legend
+              },
+              tooltip: {
+                callbacks: {
+                  label: function(context) {
+                    return " Quantity: " + context.parsed;
+                  },
+                },
+              },
+            },
+          },
         });
+
 
         new Chart(document.getElementById("banditSeverityChart").getContext("2d"), {
           type: "doughnut",
@@ -497,24 +542,28 @@
 
         document.getElementById(
           "banditVulnerabilityCount"
-        ).textContent = `Number of Bandit vulnerabilities detected: ${total}`;
+        ).textContent = `Number of SAST vulnerabilities detected: ${total}`;
       }
 
-      function adjustCanvasHeight() {
-        document.querySelectorAll('.chart-box').forEach(box => {
-          const labels = box.querySelector('.chart-labels');
-          const canvas = box.querySelector('canvas');
-          if (labels && canvas) {
-            const labelsHeight = labels.scrollHeight;  // כולל תוכן עטוף שורות
-            const minHeight = 300;
-            canvas.style.height = (labelsHeight > minHeight ? labelsHeight : minHeight) + 'px';
+       function adjustCanvasHeightToLabels() {
+          const labels = document.querySelector('.chart-labels');
+          const canvas = document.querySelector('canvas');
+
+          if (!labels || !canvas) return;
+
+          const labelsHeight = labels.getBoundingClientRect().height;
+
+          // הגדר את גובה הקנבס כמו גובה הלייבלים
+          canvas.style.height = `${labelsHeight}px`;
+
+          // אם את משתמשת ב-Chart.js
+          if (canvas.chartInstance) {
+            canvas.chartInstance.resize();
           }
-        });
-      }
+        }
 
-      window.addEventListener('load', adjustCanvasHeight);
-      window.addEventListener('resize', adjustCanvasHeight);
-
+        window.addEventListener('load', adjustCanvasHeightToLabels);
+        window.addEventListener('resize', adjustCanvasHeightToLabels);
 
       
     </script>
