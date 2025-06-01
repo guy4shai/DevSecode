@@ -31,30 +31,29 @@
       .chart-container {
         display: flex;
         justify-content: space-around;
+        flex-wrap: wrap;
         align-items: center;
         margin-top: 20px;
       }
       .chart-box {
         display: flex;
-        align-items: flex-start; /* יישור למעלה */
+        align-items: center; /* יישור למעלה */
         gap: 60px; /* רווח בין התוויות לגרף */
         margin-bottom: 40px;
         margin-top: 40px;
       }
       .chart-labels {
-        width: 200px;
-        height: 300px; /* גובה שווה לגובה הקנבס */
+        width: 250px;
+        min-height: 250px; /* גובה שווה לגובה הקנבס */
         display: flex;
         justify-content: flex-start;
         flex-direction: column;
-        justify-content: space-around; 
+        align-items: flex-start;
+        justify-content: center; 
         padding: 0;
         margin: 0;
         display: flex;
-        flex-wrap: wrap; /* מאפשר עטיפת שורות */
         gap: 7px; /* רווח בין הפריטים */
-        max-width: 300px;
-        padding-bottom: 30px;
       }
 
       .chart-labels ul {
@@ -88,7 +87,7 @@
       }
       canvas {
         max-width: 250px;
-        max-height: 300px;
+        max-height: 250px;
       }
     </style>
   </head>
@@ -113,7 +112,7 @@
     <div class="chart-container">
       <div class="chart-box">
         <div class="chart-labels" id="typeLabels"></div>
-        <canvas id="vulnerabilityTypeChart"></canvas>
+        <canvas id="vulnerabilityTypeChart" style="height: 120px;"></canvas>
       </div>
       <div class="chart-box">
         <div class="chart-labels" id="severityLabels"></div>
@@ -503,7 +502,7 @@
         new Chart(document.getElementById("banditTypeChart").getContext("2d"), {
           type: "doughnut",
           data: {
-            labels: typeLabels,  // שמות החולשות ל-tooltip
+            labels: typeLabels,  
             datasets: [
               {
                 data: typeCounts,
@@ -514,7 +513,7 @@
           options: {
             plugins: {
               legend: {
-                display: false,  // לבטל את ה-Legend
+                display: false, 
               },
               tooltip: {
                 callbacks: {
