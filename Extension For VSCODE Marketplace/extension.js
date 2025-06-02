@@ -4,16 +4,22 @@ const path = require("path");
 const fs = require("fs");
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
 const { generateContainerReports } = require("./utils/containerReport"); // 🆕 helper to create JSON
+const { getFixedVersionFromOSV } = require("./utils/osvApiHelper");
+
 // const { runDastScan } = require("./dastScan");
 let alertsProvider;
 let currentFindings = [];
 let currentTrivyFindings = [];
 let currentBanditFindings = [];
 let currentContainerFindings = []; // 🆕 container image scan findings
+let scaDiagnostics;
 
 function activate(context) {
   alertsProvider = new AlertsProvider(context);
   vscode.window.registerTreeDataProvider("devsecodeAlerts", alertsProvider);
+
+  scaDiagnostics = vscode.languages.createDiagnosticCollection("sca");
+  context.subscriptions.push(scaDiagnostics);
 
   watchGitleaksReport(context);
 
@@ -313,6 +319,126 @@ function activate(context) {
           }
         );
       });
+
+      // 🎯 רישום hover על requirements.txt
+      context.subscriptions.push(
+        vscode.languages.registerHoverProvider(
+          { pattern: "**/requirements.txt" },
+          {
+            provideHover: async (document, position) => {
+              const lineText = document.lineAt(position.line).text;
+
+              // דוגמה: flask==2.0.1
+              const match = lineText.match(/^([a-zA-Z0-9_\-]+)==([\d\.]+)$/);
+              if (!match) return;
+
+              const packageName = match[1];
+              const version = match[2];
+
+              try {
+                const fixes = await getFixedVersionFromOSV(
+                  packageName,
+                  version
+                );
+                if (fixes && fixes.length > 0) {
+                  return new vscode.Hover(
+                    `⚠️ **${packageName}==${version}** is vulnerable.\n\n💡 Recommended versions:\n- ${fixes.join(
+                      "\n- "
+                    )}`
+                  );
+                }
+              } catch (err) {
+                console.error("❌ Hover error:", err);
+              }
+
+              return; // אין הצעה => לא מציגים כלום
+            },
+          }
+        )
+      );
+
+      context.subscriptions.push(
+        vscode.languages.registerCodeActionsProvider(
+          { pattern: "**/requirements.txt" },
+          {
+            async provideCodeActions(document, range, context) {
+              const actions = [];
+
+              const lineText = document.lineAt(range.start.line).text;
+              const match = lineText.match(/^([a-zA-Z0-9_\-]+)==([\d\.]+)$/);
+              if (!match) return;
+
+              const packageName = match[1];
+              const version = match[2];
+
+              const fixes = await getFixedVersionFromOSV(packageName, version);
+              if (!fixes || fixes.length === 0) return;
+
+              const cleanFixes = fixes.filter((v) =>
+                /^\d+\.\d+(\.\d+)?$/.test(v)
+              );
+              if (cleanFixes.length === 0) return;
+
+              const diagnostic = new vscode.Diagnostic(
+                range,
+                `⚠️ ${packageName}==${version} is vulnerable.`,
+                vscode.DiagnosticSeverity.Warning
+              );
+              diagnostic.source = "SCA";
+
+              scaDiagnostics.delete(document.uri);
+              scaDiagnostics.set(document.uri, [diagnostic]);
+
+              const fix = new vscode.CodeAction(
+                `🛠 Update ${packageName} to a safer version`,
+                vscode.CodeActionKind.QuickFix
+              );
+              fix.command = {
+                title: "Choose safe version",
+                command: "devsecode.updatePackageVersion",
+                arguments: [document, range, packageName, version, cleanFixes],
+              };
+              fix.diagnostics = [diagnostic];
+
+              actions.push(fix);
+              return actions;
+            },
+          },
+          {
+            providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
+          }
+        )
+      );
+
+      context.subscriptions.push(
+        vscode.commands.registerCommand(
+          "devsecode.updatePackageVersion",
+          async (document, range, packageName, currentVersion, fixes) => {
+            const version = await vscode.window.showQuickPick(fixes, {
+              placeHolder: `Choose a secure version for ${packageName}`,
+            });
+
+            if (!version) return;
+
+            const newLine = `${packageName}==${version}`;
+            const edit = new vscode.WorkspaceEdit();
+            const fullRange = document.lineAt(range.start.line).range;
+
+            await edit.replace(document.uri, fullRange, newLine);
+            await vscode.workspace.applyEdit(edit);
+
+            vscode.window.showInformationMessage(
+              `✅ Updated ${packageName} from ${currentVersion} to ${version}`
+            );
+
+            vscode.window.showWarningMessage(
+              `⚠️ Make sure to review any code that uses '${packageName}' (e.g., 'import ${packageName}') to ensure compatibility with version ${version}.`
+            );
+
+            scaDiagnostics.delete(document.uri);
+          }
+        )
+      );
     }
   );
 
