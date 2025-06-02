@@ -5,11 +5,8 @@ const fs = require("fs");
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
 const { generateContainerReports } = require("./utils/containerReport"); // 🆕 helper to create JSON
 // const { runDastScan } = require("./dastScan");
-
-
 let alertsProvider;
 let currentFindings = [];
-let alertPanel;
 let currentTrivyFindings = [];
 let currentBanditFindings = [];
 let currentContainerFindings = []; // 🆕 container image scan findings
@@ -131,6 +128,8 @@ function activate(context) {
                         );
                         return;
                       }
+
+                      attachFilePathToTrivyFindings(trivyReportPath);
 
                       if (!fs.existsSync(trivyReportPath)) {
                         vscode.window.showInformationMessage(
@@ -294,11 +293,14 @@ function activate(context) {
                           currentBanditFindings = [];
                         }
 
-                      //  await runDastScan(rootPath);
-                        vscode.commands.registerCommand("DevSecode.showDashboard", () => {
-                          showDashboard(context, findings);
-                        });
-                        
+                        //  await runDastScan(rootPath);
+                        vscode.commands.registerCommand(
+                          "DevSecode.showDashboard",
+                          () => {
+                            showDashboard(context, findings);
+                          }
+                        );
+
                         showDashboard(context, findings);
                         alertsProvider.refresh();
                         resolve(); // ✅ מסיים את הספינר של VS Code
@@ -314,11 +316,10 @@ function activate(context) {
     }
   );
 
-  
-// 🔒 DAST integration directly embedded into DevSecode Extension
-// This is a standalone function based on the logic of dast.py, rewritten in Node.js to be part of the extension.
+  // 🔒 DAST integration directly embedded into DevSecode Extension
+  // This is a standalone function based on the logic of dast.py, rewritten in Node.js to be part of the extension.
 
-/* const runDastScan = async (rootPath) => {
+  /* const runDastScan = async (rootPath) => {
   const vscode = require("vscode");
   const path = require("path");
   const fs = require("fs");
@@ -690,11 +691,6 @@ module.exports.runDastScan = runDastScan;
   dashboardStatusBarButton.show();
 
   context.subscriptions.push(dashboardStatusBarButton);
-
-  
-
-
-
 }
 
 function watchGitleaksReport(context) {
@@ -733,77 +729,60 @@ function watchGitleaksReport(context) {
   context.subscriptions.push({ dispose: () => watcher.close() });
 }
 
-// function showDiagnostics(findings) {
-//   const diagnosticCollection =
-//     vscode.languages.createDiagnosticCollection("secretScanner");
-//   const diagnosticsMap = new Map();
+function attachFilePathToTrivyFindings(trivyReportPath) {
+  const fs = require("fs");
 
-//   // 🧠 Map Severity to VSCode DiagnosticSeverity
-//   function mapSeverity(severityStr) {
-//     const severity = (severityStr || "").toLowerCase();
-//     switch (severity) {
-//       case "critical":
-//         return vscode.DiagnosticSeverity.Error;
-//       case "high":
-//         return vscode.DiagnosticSeverity.Warning;
-//       case "medium":
-//         return vscode.DiagnosticSeverity.Information;
-//       case "low":
-//         return vscode.DiagnosticSeverity.Hint;
-//       default:
-//         return vscode.DiagnosticSeverity.Information;
-//     }
-//   }
+  try {
+    const raw = fs.readFileSync(trivyReportPath, "utf-8");
+    const json = JSON.parse(raw);
 
-//   findings.forEach((finding) => {
-//     const fileUri = vscode.Uri.file(finding.File);
-//     const line = finding.StartLine ? finding.StartLine - 1 : 0;
-//     const range = new vscode.Range(
-//       new vscode.Position(line, 0),
-//       new vscode.Position(line, 80)
-//     );
+    if (json.Results) {
+      json.Results.forEach((result) => {
+        const targetFile = result.Target;
+        if (result.Vulnerabilities) {
+          result.Vulnerabilities.forEach((vuln) => {
+            vuln.file_path = targetFile;
+          });
+        }
+      });
+    }
 
-//     // 🛡️ Default to Critical if severity is missing
-//     if (!finding.Severity) {
-//       finding.Severity = "Critical";
-//     }
+    fs.writeFileSync(trivyReportPath, JSON.stringify(json, null, 2));
+    console.log("✅ file_path added successfully to each vulnerability.");
+  } catch (err) {
+    console.error("❌ Failed to process Trivy report:", err);
+  }
+}
 
-//     const severity = mapSeverity(finding.Severity);
+function attachLinesToTrivy(trivyReportPath, requirementsPath) {
+  if (!fs.existsSync(trivyReportPath) || !fs.existsSync(requirementsPath)) {
+    console.warn("Trivy report or requirements.txt not found.");
+    return;
+  }
 
-//     const message = `🚨 Hardcoded Secret Detected
-// • Rule: ${finding.RuleID}
-// • Description: ${finding.Description || "Potential secret detected."}
-// ${finding.redacted ? "• Secret was redacted" : ""}
+  const report = JSON.parse(fs.readFileSync(trivyReportPath, "utf8"));
+  const lines = fs.readFileSync(requirementsPath, "utf8").split("\n");
 
-// ⚠️ Secrets should NEVER be committed to source code.
-// Use environment variables or a secret manager instead.`;
+  const lineMap = {};
+  lines.forEach((line, idx) => {
+    const pkg = line.split("==")[0].trim().toLowerCase();
+    if (pkg) {
+      lineMap[pkg] = idx + 1;
+    }
+  });
 
-//     const tooltip = [
-//       `Rule: ${finding.RuleID}`,
-//       `Description: ${finding.Description || "Potential secret detected."}`,
-//       finding.Secret ? `Secret: ${finding.Secret}` : "",
-//       finding.redacted ? "(Secret redacted)" : "",
-//     ].join("\n");
+  for (const result of report.Results || []) {
+    for (const vuln of result.Vulnerabilities || []) {
+      const pkg = vuln.PkgName?.toLowerCase();
+      if (pkg && lineMap[pkg]) {
+        vuln.line_number = lineMap[pkg];
+      }
+    }
+  }
 
-//     const diagnostic = new vscode.Diagnostic(range, message, severity);
-
-//     diagnostic.source = "Secret Scanner";
-//     diagnostic.code = finding.RuleID;
-//     diagnostic.relatedInformation = [
-//       new vscode.DiagnosticRelatedInformation(fileUri, tooltip),
-//     ];
-
-//     if (!diagnosticsMap.has(fileUri)) {
-//       diagnosticsMap.set(fileUri, []);
-//     }
-//     diagnosticsMap.get(fileUri).push(diagnostic);
-//   });
-
-//   diagnosticCollection.clear();
-//   diagnosticsMap.forEach((diags, uri) => {
-//     diagnosticCollection.set(uri, diags);
-//   });
-// }
+  fs.writeFileSync(trivyReportPath, JSON.stringify(report, null, 2));
+  console.log("✅ Line numbers added to Trivy report.");
+}
 
 function showDiagnostics(findings, context) {
   const diagnosticCollection =
@@ -973,7 +952,8 @@ function openAlertBanner(alertItem) {
   const filePath =
     alertItem.FilePath ||
     (alertItem.Location && alertItem.Location.Path) ||
-    alertItem.filename || "";
+    alertItem.filename ||
+    "";
   const startLine = alertItem.StartLine || alertItem.line_number || 0;
 
   html = html.replace(
@@ -1012,35 +992,6 @@ function openAlertBanner(alertItem) {
 }
 
 function deactivate() {}
-function attachLinesToTrivy(trivyReportPath, requirementsPath) {
-  if (!fs.existsSync(trivyReportPath) || !fs.existsSync(requirementsPath)) {
-    console.warn("Trivy report or requirements.txt not found.");
-    return;
-  }
-
-  const report = JSON.parse(fs.readFileSync(trivyReportPath, "utf8"));
-  const lines = fs.readFileSync(requirementsPath, "utf8").split("\n");
-
-  const lineMap = {};
-  lines.forEach((line, idx) => {
-    const pkg = line.split("==")[0].trim().toLowerCase();
-    if (pkg) {
-      lineMap[pkg] = idx + 1;
-    }
-  });
-
-  for (const result of report.Results || []) {
-    for (const vuln of result.Vulnerabilities || []) {
-      const pkg = vuln.PkgName?.toLowerCase();
-      if (pkg && lineMap[pkg]) {
-        vuln.line_number = lineMap[pkg];
-      }
-    }
-  }
-
-  fs.writeFileSync(trivyReportPath, JSON.stringify(report, null, 2));
-  console.log("✅ Line numbers added to Trivy report.");
-}
 
 class AlertsProvider {
   constructor(context) {
@@ -1187,5 +1138,3 @@ module.exports = {
   activate,
   deactivate,
 };
-
-
