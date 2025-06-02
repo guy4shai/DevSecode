@@ -1075,11 +1075,18 @@ function openAlertBanner(alertItem) {
   }
 
   // שים לב, לשלב גם נתיב קובץ של האלרט אם קיים (ל-Gitleaks או Trivy)
-  const filePath =
+  let filePath =
     alertItem.FilePath ||
     (alertItem.Location && alertItem.Location.Path) ||
-    alertItem.filename ||
+    alertItem.filename || alertItem.file_path ||
     "";
+  if (filePath && !path.isAbsolute(filePath)) {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    if (workspaceFolder) {
+      filePath = path.join(workspaceFolder.uri.fsPath, filePath);
+    }
+  }
+
   const startLine = alertItem.StartLine || alertItem.line_number || 0;
 
   html = html.replace(
@@ -1123,7 +1130,6 @@ class AlertsProvider {
   constructor(context) {
     this.context = context;
 
-    // אפשר לשמור קבצי דיווח כאן אם צריך, או להוריד את זה אם לא בשימוש
     this.reportPath = path.join(
       context.extensionPath,
       "UI",
