@@ -325,10 +325,9 @@ function activate(context) {
         vscode.languages.registerHoverProvider(
           { pattern: "**/requirements.txt" },
           {
-            provideHover: async (document, position) => {
+            async provideHover(document, position) {
               const lineText = document.lineAt(position.line).text;
 
-              // דוגמה: flask==2.0.1
               const match = lineText.match(/^([a-zA-Z0-9_\-]+)==([\d\.]+)$/);
               if (!match) return;
 
@@ -340,9 +339,14 @@ function activate(context) {
                   packageName,
                   version
                 );
-                if (fixes && fixes.length > 0) {
+
+                const cleanFixes = Array.from(
+                  new Set(fixes.filter((v) => /^\d+\.\d+(\.\d+)?$/.test(v)))
+                );
+
+                if (cleanFixes.length > 0) {
                   return new vscode.Hover(
-                    `⚠️ **${packageName}==${version}** is vulnerable.\n\n💡 Recommended versions:\n- ${fixes.join(
+                    `⚠️ **${packageName}==${version}** is vulnerable.\n\n💡 Recommended versions:\n- ${cleanFixes.join(
                       "\n- "
                     )}`
                   );
@@ -351,7 +355,7 @@ function activate(context) {
                 console.error("❌ Hover error:", err);
               }
 
-              return; // אין הצעה => לא מציגים כלום
+              return; // אין תיקונים => לא מציגים כלום
             },
           }
         )
@@ -374,9 +378,10 @@ function activate(context) {
               const fixes = await getFixedVersionFromOSV(packageName, version);
               if (!fixes || fixes.length === 0) return;
 
-              const cleanFixes = fixes.filter((v) =>
-                /^\d+\.\d+(\.\d+)?$/.test(v)
+              const cleanFixes = Array.from(
+                new Set(fixes.filter((v) => /^\d+\.\d+(\.\d+)?$/.test(v)))
               );
+
               if (cleanFixes.length === 0) return;
 
               const diagnostic = new vscode.Diagnostic(
@@ -385,9 +390,6 @@ function activate(context) {
                 vscode.DiagnosticSeverity.Warning
               );
               diagnostic.source = "SCA";
-
-              scaDiagnostics.delete(document.uri);
-              scaDiagnostics.set(document.uri, [diagnostic]);
 
               const fix = new vscode.CodeAction(
                 `🛠 Update ${packageName} to a safer version`,
@@ -401,6 +403,11 @@ function activate(context) {
               fix.diagnostics = [diagnostic];
 
               actions.push(fix);
+
+              // ✅ מוסיפים גם את ההתראה שתפעיל את הקו הצהוב
+              scaDiagnostics.delete(document.uri);
+              scaDiagnostics.set(document.uri, [diagnostic]);
+
               return actions;
             },
           },
@@ -1075,18 +1082,11 @@ function openAlertBanner(alertItem) {
   }
 
   // שים לב, לשלב גם נתיב קובץ של האלרט אם קיים (ל-Gitleaks או Trivy)
-  let filePath =
+  const filePath =
     alertItem.FilePath ||
     (alertItem.Location && alertItem.Location.Path) ||
-    alertItem.filename || alertItem.file_path ||
+    alertItem.filename ||
     "";
-  if (filePath && !path.isAbsolute(filePath)) {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (workspaceFolder) {
-      filePath = path.join(workspaceFolder.uri.fsPath, filePath);
-    }
-  }
-
   const startLine = alertItem.StartLine || alertItem.line_number || 0;
 
   html = html.replace(
@@ -1130,6 +1130,7 @@ class AlertsProvider {
   constructor(context) {
     this.context = context;
 
+    // אפשר לשמור קבצי דיווח כאן אם צריך, או להוריד את זה אם לא בשימוש
     this.reportPath = path.join(
       context.extensionPath,
       "UI",
