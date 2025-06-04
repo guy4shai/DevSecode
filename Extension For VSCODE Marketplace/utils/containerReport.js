@@ -86,4 +86,3 @@ async function generateContainerReports(imageName, flatFindings, outputDir) {
 }
 
 module.exports = { generateContainerReports };
-
