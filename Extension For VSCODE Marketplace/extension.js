@@ -11,7 +11,7 @@ let alertsProvider;
 let currentFindings = [];
 let currentTrivyFindings = [];
 let currentBanditFindings = [];
-let currentContainerFindings = []; // 🆕 container image scan findings
+let currentContainerFindings = [];
 let scaDiagnostics;
 
 function activate(context) {
@@ -386,10 +386,22 @@ function activate(context) {
 
               const diagnostic = new vscode.Diagnostic(
                 range,
-                `⚠️ ${packageName}==${version} is vulnerable.`,
-                vscode.DiagnosticSeverity.Warning
+                `❌ Vulnerable package: ${packageName}==${version}`,
+                vscode.DiagnosticSeverity.Error
               );
               diagnostic.source = "SCA";
+
+              // בדיקה אם כבר קיים, כמו קודם:
+              const existing = scaDiagnostics.get(document.uri) || [];
+              const alreadyExists = existing.some(
+                (d) =>
+                  d.range.start.line === diagnostic.range.start.line &&
+                  d.message === diagnostic.message
+              );
+              if (!alreadyExists) {
+                const updated = [...existing, diagnostic];
+                scaDiagnostics.set(document.uri, updated);
+              }
 
               const fix = new vscode.CodeAction(
                 `🛠 Update ${packageName} to a safer version`,
@@ -400,15 +412,8 @@ function activate(context) {
                 command: "devsecode.updatePackageVersion",
                 arguments: [document, range, packageName, version, cleanFixes],
               };
-              fix.diagnostics = [diagnostic];
 
-              actions.push(fix);
-
-              // ✅ מוסיפים גם את ההתראה שתפעיל את הקו הצהוב
-              scaDiagnostics.delete(document.uri);
-              scaDiagnostics.set(document.uri, [diagnostic]);
-
-              return actions;
+              return [fix];
             },
           },
           {
