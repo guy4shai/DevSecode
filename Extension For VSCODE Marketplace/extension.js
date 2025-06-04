@@ -233,7 +233,6 @@ function activate(context) {
                           }
                         }
                       }
-
                       const banditReportPath = path.join(
                         rootPath,
                         "bandit_report.json"
@@ -581,6 +580,45 @@ module.exports.runDastScan = runDastScan;
     });
 
     return Array.from(images);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helper to run container image scan (unchanged except for safeName)
+  // ---------------------------------------------------------------------------
+  async function runContainerScan(imageName, rootPath, trivyConfigToUse) {
+    const safeName = imageName.replace(/[^a-zA-Z0-9_.-]/g, "_");
+    const imageReportPath = path.join(rootPath, `trivy_image_${safeName}.json`);
+    const trivyImageCommand = trivyConfigToUse
+      ? `trivy image "${imageName}" --config "${trivyConfigToUse}" --format json --output "${imageReportPath}"`
+      : `trivy image "${imageName}" --format json --output "${imageReportPath}"`;
+
+    return new Promise((resolve) => {
+      cp.exec(trivyImageCommand, { maxBuffer: 1024 * 1000 }, (err) => {
+        if (err) {
+          vscode.window.showErrorMessage(
+            `Container scan failed for ${imageName}. Ensure Trivy is installed and Docker is running.`
+          );
+          return resolve();
+        }
+
+        let containerData = {};
+        try {
+          containerData = JSON.parse(fs.readFileSync(imageReportPath, "utf8"));
+          vscode.window.showInformationMessage(
+            `✅ Container scan for ${imageName} completed.`
+          );
+        } catch {
+          vscode.window.showWarningMessage(
+            `⚠️ Failed to parse Trivy report for ${imageName}.`
+          );
+        }
+
+        currentContainerFindings =
+          containerData.Results?.flatMap((r) => r.Vulnerabilities || []) || [];
+        currentContainerFindings._rawImageReport = containerData;
+        resolve();
+      });
+    });
   }
 
   // ---------------------------------------------------------------------------
