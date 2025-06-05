@@ -2,8 +2,9 @@ const vscode = require("vscode");
 const cp = require("child_process");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
+
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
-const { generateContainerReports } = require("./utils/containerReport"); // 🆕 helper to create JSON
 const { getFixedVersionFromOSV } = require("./utils/osvApiHelper");
 
 // const { runDastScan } = require("./dastScan");
@@ -11,8 +12,12 @@ let alertsProvider;
 let currentFindings = [];
 let currentTrivyFindings = [];
 let currentBanditFindings = [];
-let currentContainerFindings = [];
-let scaDiagnostics;
+
+function getTempScanDir() {
+  const workspacePath =
+    vscode.workspace.workspaceFolders?.[0].uri.fsPath || "default";
+  return path.join(os.tmpdir(), "devsecode", path.basename(workspacePath));
+}
 
 function activate(context) {
   alertsProvider = new AlertsProvider(context);
@@ -47,12 +52,10 @@ function activate(context) {
         ? configPathFallback
         : null;
 
-      const reportPath = path.join(rootPath, "gitleaks_report.json");
-
+      const reportPath = path.join(getTempScanDir(), "gitleaks_report.json");
       const command = configToUse
         ? `gitleaks detect --config="${configToUse}" --no-git --source="${rootPath}" --redact --report-format=json --report-path="${reportPath}"`
         : `gitleaks detect --no-git --source="${rootPath}" --redact --report-format=json --report-path="${reportPath}"`;
-
       cp.exec("gitleaks version", (versionErr) => {
         if (versionErr) {
           vscode.window.showErrorMessage(
@@ -69,7 +72,11 @@ function activate(context) {
           ? trivyConfigPathFallback
           : null;
 
-        const trivyReportPath = path.join(rootPath, "trivy_report.json");
+        const trivyReportPath = path.join(
+          getTempScanDir(),
+          "trivy_report.json"
+        ); //Json מוסתר
+        //const trivyReportPath = path.join(rootPath, "trivy_report.json");
         const trivyCommand = trivyConfigToUse
           ? `trivy fs "${rootPath}" --config "${trivyConfigToUse}" --format json --output "${trivyReportPath}"`
           : `trivy fs "${rootPath}" --format json --output "${trivyReportPath}"`;
@@ -82,10 +89,16 @@ function activate(context) {
           },
           () => {
             return new Promise((resolve) => {
+              const tempDir = getTempScanDir();
+              if (!fs.existsSync(tempDir)) {
+                fs.mkdirSync(tempDir, { recursive: true });
+              }
               cp.exec(
                 command,
                 { maxBuffer: 1024 * 1000 },
                 (err, stdout, stderr) => {
+                  console.log("📥 Gitleaks STDOUT:", stdout);
+                  console.log("📤 Gitleaks STDERR:", stderr);
                   if (!fs.existsSync(reportPath)) {
                     vscode.window.showInformationMessage(
                       "No JSON report created. Possibly no leaks or an error occurred."
@@ -230,15 +243,24 @@ function activate(context) {
                         }
                       }
                       const banditReportPath = path.join(
-                        rootPath,
-                        "bandit_report.json"
-                      );
+                        getTempScanDir(),
+                        "bandit_report.jsonn"
+                      ); // Json מוסתר
+                      // const banditReportPath = path.join(
+                      //   rootPath,
+                      //   "bandit_report.json"
+                      // );
                       const banditCommand = `bandit -r "${rootPath}" --exclude "${rootPath}/node_modules,${rootPath}/venv" -f json -o "${banditReportPath}"`;
 
                       const semgrepReportPath = path.join(
-                        rootPath,
+                        getTempScanDir(),
                         "semgrep_report.json"
-                      );
+                      ); // Json מוסתר
+
+                      // const semgrepReportPath = path.join(
+                      //   rootPath,
+                      //   "semgrep_report.json"
+                      // );
                       const semgrepCommand = `semgrep --config auto --json --output "${semgrepReportPath}" "${rootPath}"`;
 
                       const util = require("util");
@@ -680,16 +702,21 @@ module.exports.runDastScan = runDastScan;
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
 
       // 🟩 טוען את הדוח JSON
-      const findingsPath = path.join(__dirname, "UI", "gitleaks_report.json");
+      const findingsPath = path.join(getTempScanDir(), "gitleaks_report.json");
       if (!fs.existsSync(findingsPath)) {
         vscode.window.showErrorMessage(
           "❌ Could not find gitleaks_report.json in UI folder."
         );
         return;
       }
-      const trivyPath = path.join(workspacePath, "trivy_report.json");
-      const semgrepPath = path.join(workspacePath, "semgrep_report.json");
-      const banditPath = path.join(workspacePath, "bandit_report.json");
+
+      const trivyPath = path.join(getTempScanDir(), "trivy_report.json");
+      const banditPath = path.join(getTempScanDir(), "bandit_report.json");
+      const semgrepPath = path.join(getTempScanDir(), "semgrep_report.json");
+
+      // const trivyPath = path.join(workspacePath, "trivy_report.json");
+      // const semgrepPath = path.join(workspacePath, "semgrep_report.json");
+      // const banditPath = path.join(workspacePath, "bandit_report.json");
 
       let trivyFindings = [];
       let semgrepFindings = [];
@@ -788,11 +815,12 @@ module.exports.runDastScan = runDastScan;
 }
 
 function watchGitleaksReport(context) {
-  const reportPath = path.join(
-    context.extensionPath,
-    "UI",
-    "gitleaks_report.json"
-  );
+  // const reportPath = path.join(
+  //   context.extensionPath,
+  //   "UI",
+  //   "gitleaks_report.json"
+  // );
+  const reportPath = path.join(getTempScanDir(), "gitleaks_report.json");
 
   if (!fs.existsSync(reportPath)) {
     console.warn("gitleaks_report.json not found, skipping watch setup.");
@@ -941,10 +969,7 @@ function showDashboard(context, findings) {
   const imageUri = panel.webview.asWebviewUri(imagePath);
 
   // 🆕 קריאת הדוח של Trivy
-  const trivyReportPath = path.join(
-    vscode.workspace.workspaceFolders?.[0].uri.fsPath || "",
-    "trivy_report.json"
-  );
+  const trivyReportPath = path.join(getTempScanDir(), "trivy_report.json");
 
   let trivyData = null;
   if (fs.existsSync(trivyReportPath)) {
@@ -957,10 +982,7 @@ function showDashboard(context, findings) {
   }
 
   // 📘 קריאת דוח Bandit
-  const banditReportPath = path.join(
-    vscode.workspace.workspaceFolders?.[0].uri.fsPath || "",
-    "bandit_report.json"
-  );
+  const banditReportPath = path.join(getTempScanDir(), "bandit_report.json");
 
   let banditData = null;
   if (fs.existsSync(banditReportPath)) {
@@ -988,60 +1010,6 @@ function showDashboard(context, findings) {
     );
 
   panel.webview.html = html;
-
-  panel.webview.onDidReceiveMessage(async (message) => {
-    if (message.type === "vulnerabilityTypeClicked") {
-      const clickedType = message.label;
-
-      const detailPanel = vscode.window.createWebviewPanel(
-        "vulnerabilityDetail",
-        `Vulnerability: ${clickedType}`,
-        vscode.ViewColumn.One,
-        {
-          enableScripts: true,
-          localResourceRoots: [
-            vscode.Uri.file(path.join(context.extensionPath, "media")),
-          ],
-        }
-      );
-
-      const htmlPath = path.join(
-        context.extensionPath,
-        "UI",
-        "vulnerabilityChartDetail.html"
-      );
-      const rawHtml = fs.readFileSync(htmlPath, "utf8");
-
-      detailPanel.webview.html = rawHtml;
-
-      // 🔍 מצא את כל השורות המתאימות לסוג החולשה
-      const findingsForType = findings.filter(
-        (f) => f.ruleId === clickedType || f.type === clickedType
-      );
-      const lines = findingsForType
-        .map((f) => f.StartLine || f.line_number || f.location?.start?.line)
-        .filter(Boolean);
-
-
-      const sendMessageToDetailPanel = () => {
-        detailPanel.webview.postMessage({
-          type: "setVulnerability",
-          label: clickedType,
-          lines: lines, // ✅ נשלחות השורות ל-HTML
-        });
-      };
-
-      setTimeout(sendMessageToDetailPanel, 100);
-
-      detailPanel.onDidChangeViewState((e) => {
-        if (e.webviewPanel.visible) {
-          sendMessageToDetailPanel();
-        }
-      });
-    }
-  });
-
-
 }
 
 function openAlertBanner(alertItem) {
