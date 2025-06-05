@@ -832,10 +832,14 @@ function attachFilePathToTrivyFindings(trivyReportPath) {
 
     if (json.Results) {
       json.Results.forEach((result) => {
+        const workspacePath =
+          vscode.workspace.workspaceFolders?.[0].uri.fsPath || "";
         const targetFile = result.Target;
+        const absolutePath = path.join(workspacePath, targetFile);
+
         if (result.Vulnerabilities) {
           result.Vulnerabilities.forEach((vuln) => {
-            vuln.file_path = targetFile;
+            vuln.file_path = absolutePath;
           });
         }
       });
