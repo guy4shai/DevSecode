@@ -244,7 +244,7 @@ function activate(context) {
                       }
                       const banditReportPath = path.join(
                         getTempScanDir(),
-                        "bandit_report.jsonn"
+                        "bandit_report.json"
                       ); // Json מוסתר
                       // const banditReportPath = path.join(
                       //   rootPath,
@@ -1010,6 +1010,84 @@ function showDashboard(context, findings) {
     );
 
   panel.webview.html = html;
+
+  panel.webview.onDidReceiveMessage(async (message) => {
+    if (message.type === "vulnerabilityTypeClicked") {
+      const clickedType = message.label;
+
+      const detailPanel = vscode.window.createWebviewPanel(
+        "vulnerabilityDetail",
+        `Vulnerability: ${clickedType}`,
+        vscode.ViewColumn.One,
+        {
+          enableScripts: true,
+          localResourceRoots: [
+            vscode.Uri.file(path.join(context.extensionPath, "UI")),
+          ],
+        }
+      );
+
+      const htmlPath = path.join(
+        context.extensionPath,
+        "UI",
+        "vulnerabilityChartDetail.html"
+      );
+      let rawHtml = fs.readFileSync(htmlPath, "utf8");
+
+      // מיזוג כל הסריקות
+      const allFindings = [
+        ...(currentFindings || []),
+        ...(currentTrivyFindings?.Results?.flatMap((r) => r.Vulnerabilities || []) || []),
+        ...(currentBanditFindings || []),
+      ];
+
+      const clickedTypeLower = clickedType.toLowerCase();
+
+      const findingsForType = allFindings.filter(item => {
+        const ruleId = item.RuleID || item.ruleId || "";
+        const vulnId = item.VulnerabilityID || "";
+        const testName = item.test_name || "";
+
+        return (
+          ruleId.toLowerCase() === clickedTypeLower ||
+          vulnId.toLowerCase() === clickedTypeLower ||
+          testName.toLowerCase() === clickedTypeLower
+        );
+      });
+
+
+      // פונקציה שמוציאה שורה תקינה מכל ממצא (אם קיימת)
+      function getLine(item) {
+        return (
+          item.StartLine ||
+          item.line_number ||
+          item.Line ||
+          item.Location?.StartLine ||
+          item.location?.start?.line ||
+          null
+        );
+      }
+
+      // מוסיפים שדה line לכל occurrence
+      const findingsWithLines = findingsForType.map((item) => ({
+        ...item,
+        line: getLine(item),
+      }));
+
+      // הזרקת מידע ל־HTML לפני סגירת </head>
+      rawHtml = rawHtml.replace(
+        "</head>",
+        `<script>
+          const selectedVulnerabilityLabel = ${JSON.stringify(clickedType)};
+          const occurrences = ${JSON.stringify(findingsWithLines)};
+        </script></head>`
+      );
+
+      detailPanel.webview.html = rawHtml;
+    }
+  });
+
+
 }
 
 function openAlertBanner(alertItem) {
@@ -1072,7 +1150,7 @@ function openAlertBanner(alertItem) {
   const filePath =
     alertItem.FilePath ||
     (alertItem.Location && alertItem.Location.Path) ||
-    alertItem.filename ||
+    alertItem.filename || alertItem.file_path ||
     "";
   const startLine = alertItem.StartLine || alertItem.line_number || 0;
 
@@ -1117,7 +1195,6 @@ class AlertsProvider {
   constructor(context) {
     this.context = context;
 
-    // אפשר לשמור קבצי דיווח כאן אם צריך, או להוריד את זה אם לא בשימוש
     this.reportPath = path.join(
       context.extensionPath,
       "UI",
@@ -1230,7 +1307,7 @@ class AlertsProvider {
           "No description";
         const severity = item.severity || item.issue_severity;
         const filePath =
-          item.File || item.Path || item.filename || item.Location?.Path || "";
+          item.File || item.Path || item.filename || item.file_path || item.Location?.Path || "";
         item.FilePath = filePath;
         const alertItem = new vscode.TreeItem(
           label,
