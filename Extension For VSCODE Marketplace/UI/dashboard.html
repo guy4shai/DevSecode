@@ -418,12 +418,26 @@
                 callbacks: {
                   label: function(context) {
                     return " Quantity: " + context.parsed;
-                  }
-                }
+                  },
+                },
+              },
+            },
+            onClick: (event, elements) => {
+              if (elements.length > 0) {
+                const chartIndex = elements[0].index;
+                const clickedLabel = idLabels[chartIndex];
+
+                // שלח הודעה ל-extension עם שם החולשה
+                vscode.postMessage({
+                  type: "vulnerabilityTypeClicked",
+                  label: clickedLabel,
+                });
               }
-            }
-          }
-        });
+            },
+          },
+        }
+      );
+
 
 
         new Chart(document.getElementById("scaSeverityChart").getContext("2d"), {
@@ -536,8 +550,22 @@
                 },
               },
             },
+            onClick: (event, elements) => {
+              if (elements.length > 0) {
+                const chartIndex = elements[0].index;
+                const clickedLabel = typeLabels[chartIndex];
+
+                // שלח הודעה ל-extension עם שם החולשה
+                vscode.postMessage({
+                  type: "vulnerabilityTypeClicked",
+                  label: clickedLabel,
+                });
+              }
+            },
           },
-        });
+        }
+      );
+
 
 
         new Chart(document.getElementById("banditSeverityChart").getContext("2d"), {
