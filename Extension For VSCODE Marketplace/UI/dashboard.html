@@ -184,6 +184,7 @@
     </div>
     
     <script>
+      const vscode = acquireVsCodeApi();
 
       function fetchData() {
         if (typeof reportData !== "undefined") {
@@ -269,35 +270,47 @@
             .join("") +
           "</ul>";
 
-        new Chart(
-          document.getElementById("vulnerabilityTypeChart").getContext("2d"),
-          {
-            type: "doughnut",
-            data: {
-              labels: typeLabels,
-              datasets: [
-                {
-                  data: Object.values(types),
-                  backgroundColor: typeColors,
-                },
-              ],
-            },
-            options: {
-              plugins: {
-                legend: {
-                  display: false,           
-                },
-                tooltip: {
-                  callbacks: {
-                    label: function(context) {
-                      return " Quantity: " + context.parsed;
-                    },
+        new Chart(document.getElementById("vulnerabilityTypeChart").getContext("2d"),
+        {
+          type: "doughnut",
+          data: {
+            labels: typeLabels,
+            datasets: [
+              {
+                data: Object.values(types),
+                backgroundColor: typeColors,
+              },
+            ],
+          },
+          options: {
+            plugins: {
+              legend: {
+                display: false,
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    return " Quantity: " + context.parsed;
                   },
                 },
               },
             },
-          }
-        );
+            onClick: (event, elements) => {
+              if (elements.length > 0) {
+                const chartIndex = elements[0].index;
+                const clickedLabel = typeLabels[chartIndex];
+
+                // שלח הודעה ל-extension עם שם החולשה
+                vscode.postMessage({
+                  type: "vulnerabilityTypeClicked",
+                  label: clickedLabel,
+                });
+              }
+            },
+          },
+        }
+      );
+
 
 
         new Chart(document.getElementById("severityChart").getContext("2d"), {
