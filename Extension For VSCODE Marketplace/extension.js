@@ -988,6 +988,60 @@ function showDashboard(context, findings) {
     );
 
   panel.webview.html = html;
+
+  panel.webview.onDidReceiveMessage(async (message) => {
+    if (message.type === "vulnerabilityTypeClicked") {
+      const clickedType = message.label;
+
+      const detailPanel = vscode.window.createWebviewPanel(
+        "vulnerabilityDetail",
+        `Vulnerability: ${clickedType}`,
+        vscode.ViewColumn.One,
+        {
+          enableScripts: true,
+          localResourceRoots: [
+            vscode.Uri.file(path.join(context.extensionPath, "media")),
+          ],
+        }
+      );
+
+      const htmlPath = path.join(
+        context.extensionPath,
+        "UI",
+        "vulnerabilityChartDetail.html"
+      );
+      const rawHtml = fs.readFileSync(htmlPath, "utf8");
+
+      detailPanel.webview.html = rawHtml;
+
+      // 🔍 מצא את כל השורות המתאימות לסוג החולשה
+      const findingsForType = findings.filter(
+        (f) => f.ruleId === clickedType || f.type === clickedType
+      );
+      const lines = findingsForType
+        .map((f) => f.StartLine || f.line_number || f.location?.start?.line)
+        .filter(Boolean);
+
+
+      const sendMessageToDetailPanel = () => {
+        detailPanel.webview.postMessage({
+          type: "setVulnerability",
+          label: clickedType,
+          lines: lines, // ✅ נשלחות השורות ל-HTML
+        });
+      };
+
+      setTimeout(sendMessageToDetailPanel, 100);
+
+      detailPanel.onDidChangeViewState((e) => {
+        if (e.webviewPanel.visible) {
+          sendMessageToDetailPanel();
+        }
+      });
+    }
+  });
+
+
 }
 
 function openAlertBanner(alertItem) {
