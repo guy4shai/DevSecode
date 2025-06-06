@@ -1084,9 +1084,19 @@ function showDashboard(context, findings) {
       );
 
       detailPanel.webview.html = rawHtml;
+
+      detailPanel.webview.onDidReceiveMessage(
+        (message) => {
+          if (message.command === "openAlertBanner" && message.alertItem) {
+            openAlertBanner(message.alertItem); // משתמש בפונקציה הקיימת
+          }
+        },
+        undefined,
+        context.subscriptions
+      );
+
     }
   });
-
 
 }
 
