@@ -602,10 +602,113 @@
           }
         }
 
-        window.addEventListener('load', adjustCanvasHeightToLabels);
+        window.addEventListener('load', () => {
+          adjustCanvasHeightToLabels();
+          setTimeout(sendChartsToExtension, 5000); // המתנה שהגרפים יסיימו להיטען
+        });
         window.addEventListener('resize', adjustCanvasHeightToLabels);
 
-      
+        function collectLegend(containerId) {
+          const items = [];
+          const container = document.getElementById(containerId);
+          if (!container) return items;
+        
+          container.querySelectorAll("li").forEach((li) => {
+            const colorEl = li.querySelector(".label-color");
+            let color = colorEl?.style?.backgroundColor || "#000";
+        
+            // המרה ל־HEX אם הצבע הוא ב־rgb או hsl
+            if (color.startsWith("rgb")) {
+              color = rgbToHex(color);
+            }
+        
+            const label = li.textContent.trim();
+            items.push({ label, color });
+          });
+        
+          return items;
+        }
+
+        function rgbToHex(color) {
+          const rgb = color.match(/\d+/g);
+          if (!rgb || rgb.length < 3) return "#000000";
+          return (
+            "#" +
+            rgb
+              .slice(0, 3)
+              .map((v) => parseInt(v).toString(16).padStart(2, "0"))
+              .join("")
+          );
+        }        
+        
+        
+        function sendChartsToExtension() {
+          const charts = [
+            {
+              id: "secrets_type",
+              canvasId: "vulnerabilityTypeChart",
+              legendId: "typeLabels"
+            },
+            {
+              id: "secrets_severity",
+              canvasId: "severityChart",
+              legendId: "severityLabels"
+            },
+            {
+              id: "sca_type",
+              canvasId: "scaTypeChart",
+              legendId: "scaTypeLabels"
+            },
+            {
+              id: "sca_severity",
+              canvasId: "scaSeverityChart",
+              legendId: "scaSeverityLabels"
+            },
+            {
+              id: "sast_type",
+              canvasId: "banditTypeChart",
+              legendId: "banditTypeLabels"
+            },
+            {
+              id: "sast_severity",
+              canvasId: "banditSeverityChart",
+              legendId: "banditSeverityLabels"
+            }
+          ];
+        
+          charts.forEach(({ id, canvasId, legendId }) => {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+        
+            const dataUrl = canvas.toDataURL("image/png");
+            const legend = collectLegend(legendId);
+        
+            vscode.postMessage({
+              type: "chartImage",
+              chartId: id,
+              dataUrl: dataUrl,
+              legend: legend
+            });
+          });
+        }
+        
+        
+        function collectLegend(containerId) {
+          const items = [];
+          const container = document.getElementById(containerId);
+          if (!container) return items;
+        
+          container.querySelectorAll("li").forEach((li) => {
+            const colorEl = li.querySelector(".label-color");
+            const color = colorEl?.style?.backgroundColor || "#000";
+            const label = li.textContent.trim();
+            items.push({ label, color });
+          });
+        
+          return items;
+        }
+        
+        
     </script>
   </body>
 </html>

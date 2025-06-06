@@ -1,7 +1,10 @@
 {
   "selectedSeverities": [
-    "High"
+    "Critical",
+    "High",
+    "Medium",
+    "Low"
   ],
-  "sortBy": "severity",
-  "workspacePath": "c:\\Users\\eden1\\OneDrive\\Desktop\\project"
+  "sortBy": "line",
+  "workspacePath": "/Users/macbook/Desktop/devsecode/sast"
 }

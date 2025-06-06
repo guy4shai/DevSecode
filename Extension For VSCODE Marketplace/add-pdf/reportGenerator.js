@@ -5,10 +5,9 @@ const PDFDocument = require('pdfkit');
 function getSeverity(entropy) {
   if (entropy > 4.5) return { level: 'Critical', color: '#B33A3A' };
   if (entropy > 4.0) return { level: 'High', color: '#FF6F61' };
-  if (entropy > 3.5) return { level: 'Medium', color: 'FFB347' };
-  return { level: 'Low', color: 'FFF176' };
+  if (entropy > 3.5) return { level: 'Medium', color: '#FFB347' };
+  return { level: 'Low', color: '#FFF176' };
 }
-
 
 function getRecommendation(ruleID) {
   return `It is recommended to review uses of '${ruleID}', follow secure coding practices, and replace any exposed secrets with secure storage methods.`;
@@ -18,11 +17,22 @@ function getSeverityScore(level) {
   return { 'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3 }[level] ?? 4;
 }
 
+function rgbToHex(rgbString) {
+  const rgb = rgbString.match(/\d+/g);
+  if (!rgb || rgb.length < 3) return "#000000";
+  return (
+    "#" +
+    rgb
+      .slice(0, 3)
+      .map((v) => parseInt(v).toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
 
 function normalizeFindings({ gitleaks = [], trivy = [], semgrep = [], bandit = [] }) {
   const normalized = [];
 
-  // Gitleaks
   gitleaks.forEach(f => {
     normalized.push({
       tool: 'Gitleaks',
@@ -35,7 +45,6 @@ function normalizeFindings({ gitleaks = [], trivy = [], semgrep = [], bandit = [
     });
   });
 
-  // Trivy
   trivy.Results?.forEach(result => {
     result.Vulnerabilities?.forEach(vuln => {
       normalized.push({
@@ -50,21 +59,19 @@ function normalizeFindings({ gitleaks = [], trivy = [], semgrep = [], bandit = [
     });
   });
 
-  // Semgrep
-  semgrep.results?.forEach(item => {
+  semgrep?.results?.forEach(item => {
     normalized.push({
       tool: 'Semgrep',
       File: item.path,
       StartLine: item.start?.line || 1,
       RuleID: item.check_id,
       Description: item.extra?.message || item.message,
-      Match: '', // אין match מדויק
-      Entropy: 4.5 // נניח חומרה בינונית כברירת מחדל
+      Match: '',
+      Entropy: 4.5
     });
   });
 
-  // Bandit
-  bandit.results?.forEach(item => {
+  bandit?.results?.forEach(item => {
     normalized.push({
       tool: 'Bandit',
       File: item.filename,
@@ -80,7 +87,7 @@ function normalizeFindings({ gitleaks = [], trivy = [], semgrep = [], bandit = [
 }
 
 function getEntropyFromSeverity(sev) {
-  switch (sev.toLowerCase?.()) {
+  switch (sev?.toLowerCase?.()) {
     case 'critical': return 5.0;
     case 'high': return 4.5;
     case 'medium': return 4.0;
@@ -91,35 +98,50 @@ function getEntropyFromSeverity(sev) {
 
 function filterFindings(findings, config) {
   const selectedSeverities = config.selectedSeverities || ['Critical','High', 'Medium', 'Low'];
-
-  const filtered = findings.filter(finding => {
-    const sev = getSeverity(finding.Entropy).level;
-    return selectedSeverities.includes(sev);
-  });
-
-  if (config.sortBy === 'severity') {
-    filtered.sort((a, b) => {
-      const aScore = getSeverityScore(getSeverity(a.Entropy).level);
-      const bScore = getSeverityScore(getSeverity(b.Entropy).level);
-      return aScore - bScore;
-    });
-  } else if (config.sortBy === 'line') {
-    filtered.sort((a, b) => (a.StartLine || 0) - (b.StartLine || 0));
-  }
-
-  return filtered;
+  const filtered = findings.filter(f => selectedSeverities.includes(getSeverity(f.Entropy).level));
+  return config.sortBy === 'severity'
+    ? filtered.sort((a, b) => getSeverityScore(getSeverity(a.Entropy).level) - getSeverityScore(getSeverity(b.Entropy).level))
+    : filtered.sort((a, b) => (a.StartLine || 0) - (b.StartLine || 0));
 }
 
-async function generatePDFReport(gitleaksFindings, config, tools = {}) {
-  const { trivyFindings = [], semgrepFindings = [], banditFindings = [] } = tools;
+function renderChartWithLegend(doc, chartData, titleText, fixedY = null) {
+  if (!chartData?.image) return;
 
-  const allFindings = normalizeFindings({
-    gitleaks: gitleaksFindings,
-    trivy: trivyFindings,
-    semgrep: semgrepFindings,
-    bandit: banditFindings
+  const imageBuffer = Buffer.from(chartData.image.replace(/^data:image\/png;base64,/, ''), 'base64');
+  const chartX = 300;
+  const chartY = fixedY !== null ? fixedY : doc.y;
+  const chartWidth = 250;
+  const chartHeight = 250;
+
+  doc.image(imageBuffer, chartX, chartY, { fit: [chartWidth, chartHeight] });
+
+  const legendItems = chartData.legend || [];
+  const legendX = 50;
+  let legendY = chartY;
+
+  doc.fillColor('black');
+  doc.font('Helvetica-Bold').fontSize(14).text(titleText, legendX, legendY, { underline: true });
+  legendY += 25;
+
+  legendItems.forEach(({ label, color }) => {
+    if (color && color.startsWith("rgb")) {
+      color = rgbToHex(color);
+    }
+
+    const boxSize = 10;
+    doc.fillColor(color).rect(legendX, legendY, boxSize, boxSize).fill();
+    doc.fillColor('black').font('Helvetica').fontSize(10).text(` ${label}`, legendX + boxSize + 5, legendY - 1);
+    legendY += 20;
   });
 
+  doc.moveDown(2);
+}
+
+
+
+async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Images = {}) {
+  const { trivyFindings = [], semgrepFindings = [], banditFindings = [] } = tools;
+  const allFindings = normalizeFindings({ gitleaks: gitleaksFindings, trivy: trivyFindings, semgrep: semgrepFindings, bandit: banditFindings });
   const filteredFindings = filterFindings(allFindings, config);
 
   const workspacePath = config.workspacePath || process.cwd();
@@ -133,54 +155,78 @@ async function generatePDFReport(gitleaksFindings, config, tools = {}) {
   const doc = new PDFDocument({ margin: 50 });
   doc.pipe(fs.createWriteStream(pdfPath));
 
-  const now = new Date().toLocaleString();
-  doc.fontSize(10).fillColor('gray').text(`Generated on: ${now}`, { align: 'right' });
-  doc.moveDown();
+  const sections = [
+    { key: 'secrets', title: 'Secret Detection' },
+    { key: 'sca', title: 'Software Composition Analysis (SCA)' },
+    { key: 'sast', title: 'Static Application Security Testing (SAST)' },
+  ];
+ // doc.addPage();
 
-  doc.font('Courier-Bold').fontSize(20).fillColor('black').text('DevSecode Report', { align: 'center' });
-  doc.moveDown();
+  // כותרת פתיחה
+  doc.font('Helvetica-Bold').fontSize(26).fillColor('black').text('DevSecode Security Report', {
+    align: 'center',
+  });
+  doc.moveDown(1);
+  
+  // שם הפרויקט
+  const projectName = path.basename(workspacePath);
+  doc.font('Helvetica').fontSize(16).text(`Project: ${projectName}`, {
+    align: 'center',
+  });
+  doc.moveDown(1);
+  
+  // תאריך
+  doc.fontSize(12).fillColor('gray').text(`Generated on: ${new Date().toLocaleString()}`, {
+    align: 'center',
+  });
+  
+  doc.addPage();
+
+  let isFirstSection = true;
+
+  for (const { key, title } of sections) {
+    const typeKey = `${key}_type`;
+    const severityKey = `${key}_severity`;
+  
+    if (base64Images[typeKey]?.image || base64Images[severityKey]?.image) {
+      if (!isFirstSection) {
+        doc.addPage(); // רק אחרי הפעם הראשונה
+      } else {
+        isFirstSection = false;
+      }
+  
+      doc.font('Helvetica-Bold').fontSize(18).text(title, { align: 'center' });
+      renderChartWithLegend(doc, base64Images[typeKey], 'Findings by Type:', 100);
+      renderChartWithLegend(doc, base64Images[severityKey], 'Findings by Severity:', 420);
+    }
+  }
+
+  
 
   if (filteredFindings.length === 0) {
     doc.fontSize(14).text('No findings matched the selected filters.', { align: 'center' });
   } else {
     filteredFindings.forEach(finding => {
-      if (doc.y > doc.page.height - 150) {
-        doc.addPage();
-      }
-
+      doc.addPage();
       const { level, color } = getSeverity(finding.Entropy);
-
-      doc.fillColor(color).font('Courier-Bold').fontSize(16).text(`Severity: ${level}`);
-      doc.fillColor('black').fontSize(12).font('Courier');
-
-      doc.font('Courier-Bold').text('Tool: ', { continued: true });
-      doc.font('Courier').text(finding.tool);
-      doc.moveDown(0.5);
-
-      doc.font('Courier-Bold').text('File: ', { continued: true });
-      doc.font('Courier').text(finding.File);
-      doc.moveDown(0.5);
-
-      doc.font('Courier-Bold').text('Line: ', { continued: true });
-      doc.font('Courier').text(finding.StartLine.toString());
-      doc.moveDown(0.5);
-
-      doc.font('Courier-Bold').text('Rule: ', { continued: true });
-      doc.font('Courier').text(finding.RuleID);
-      doc.moveDown(0.5);
-
-      doc.font('Courier-Bold').text('Description: ', { continued: true });
-      doc.font('Courier').text(finding.Description || 'N/A');
-      doc.moveDown(0.5);
-
+      doc.fillColor(color).font('Helvetica-Bold').fontSize(16).text(`Severity: ${level}`);
+      doc.fillColor('black').fontSize(12).font('Helvetica');
+      doc.font('Helvetica-Bold').text('Tool: ', { continued: true });
+      doc.font('Helvetica').text(finding.tool); doc.moveDown(0.5);
+      doc.font('Helvetica-Bold').text('File: ', { continued: true });
+      doc.font('Helvetica').text(finding.File); doc.moveDown(0.5);
+      doc.font('Helvetica-Bold').text('Line: ', { continued: true });
+      doc.font('Helvetica').text(finding.StartLine.toString()); doc.moveDown(0.5);
+      doc.font('Helvetica-Bold').text('Rule: ', { continued: true });
+      doc.font('Helvetica').text(finding.RuleID); doc.moveDown(0.5);
+      doc.font('Helvetica-Bold').text('Description: ', { continued: true });
+      doc.font('Helvetica').text(finding.Description || 'N/A'); doc.moveDown(0.5);
       if (finding.Match) {
-        doc.font('Courier-Bold').text('Snippet: ', { continued: true });
-        doc.font('Courier').text(finding.Match);
-        doc.moveDown(0.5);
+        doc.font('Helvetica-Bold').text('Snippet: ', { continued: true });
+        doc.font('Helvetica').text(finding.Match); doc.moveDown(0.5);
       }
-
-      doc.font('Courier-Bold').text('Recommendation: ', { continued: true });
-      doc.font('Courier').text(getRecommendation(finding.RuleID));
+      doc.font('Helvetica-Bold').text('Recommendation: ', { continued: true });
+      doc.font('Helvetica').text(getRecommendation(finding.RuleID));
       doc.moveDown(1.5);
     });
   }

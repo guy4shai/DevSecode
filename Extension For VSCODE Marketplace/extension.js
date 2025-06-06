@@ -3,6 +3,7 @@ const cp = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const chartImages = {};
 
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
 const { getFixedVersionFromOSV } = require("./utils/osvApiHelper");
@@ -762,11 +763,19 @@ module.exports.runDastScan = runDastScan;
         return;
       }
 
-      const reportPath = await generatePDFReport(findings, config, {
+      /*const reportPath = await generatePDFReport(findings, config, {
         trivyFindings,
         semgrepFindings,
         banditFindings,
-      });
+      });*/
+      const base64Images = Object.values(chartImages); // הופך את map לרשימה
+
+      await generatePDFReport(findings, config, {
+        trivyFindings,
+        semgrepFindings,
+        banditFindings
+      }, chartImages);      
+
       // ✅ פתיחת הדוח לאחר יצירתו
       vscode.window
         .showInformationMessage(
@@ -1012,6 +1021,15 @@ function showDashboard(context, findings) {
   panel.webview.html = html;
 
   panel.webview.onDidReceiveMessage(async (message) => {
+
+    if (message.type === "chartImage") {
+      chartImages[message.chartId] = {
+        image: message.dataUrl,
+        legend: message.legend || []
+      };
+      console.log(`📊 Got image & legend: ${message.chartId}`);
+    }
+  
     if (message.type === "vulnerabilityTypeClicked") {
       const clickedType = message.label;
 
