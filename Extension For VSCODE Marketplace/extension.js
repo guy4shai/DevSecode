@@ -1129,6 +1129,116 @@ function showDashboard(context, findings) {
       );
 
     }
+
+    //************************************************
+    if (message.type === "severitySliceClicked") {
+      const clickedSeverity = message.label;
+      const clickedScanner = message.scanner;
+
+      const detailPanel = vscode.window.createWebviewPanel(
+        "severityDetail",
+        `Severity: ${clickedSeverity}`,
+        vscode.ViewColumn.One,
+        {
+          enableScripts: true,
+          localResourceRoots: [
+            vscode.Uri.file(path.join(context.extensionPath, "UI")),
+          ],
+        }
+      );
+
+      const htmlPath = path.join(
+        context.extensionPath,
+        "UI",
+        "severityChartDetail.html"
+      );
+      let rawHtml = fs.readFileSync(htmlPath, "utf8");
+
+      // זיהוי סוג סורק לפי שדות ייחודיים
+      function getScannerName(item) {
+        if (item.VulnerabilityID) return "trivy";
+        if (item.RuleID) return "gitleaks";
+        if (item.test_name) return "bandit";
+        return "unknown";
+      }
+
+      // מקבל שורת קוד
+      function getLine(item) {
+        return (
+          item.StartLine ||
+          item.line_number ||
+          item.Line ||
+          item.Location?.StartLine ||
+          item.location?.start?.line ||
+          null
+        );
+      }
+
+      // מקבל מיקום קובץ
+      function getFilePath(item) {
+        return (
+          item.file ||
+          item.File ||
+          item.filename ||
+          item.file_path ||
+          item.FilePath ||
+          item.Target ||
+          item.Location?.Path ||
+          item.location?.file ||
+          item.location?.path ||
+          null
+        );
+      }
+
+      // איסוף כל התוצאות מכל הסורקים
+      const allFindings = [
+        ...(currentFindings || []),
+        ...(currentTrivyFindings?.Results?.flatMap((r) => r.Vulnerabilities || []) || []),
+        ...(currentBanditFindings || []),
+      ];
+
+      const clickedSeverityLower = clickedSeverity.toLowerCase();
+      const normalizedClickedScanner = clickedScanner.trim().toLowerCase();
+
+      // פילטור לפי חומרה וסורק
+      const findingsForSeverity = allFindings.filter(item => {
+        const severity = (item.Severity || item.issue_severity || item.Level || "").toLowerCase();
+        const scanner = getScannerName(item);
+        return severity === clickedSeverityLower && scanner === normalizedClickedScanner;
+      });
+
+
+      // הוספת מיקום שורה וקובץ
+      const findingsWithLines = findingsForSeverity.map((item) => ({
+        ...item,
+        line: getLine(item),
+        file: getFilePath(item)
+      }));
+
+      // החדרת המשתנים ל-HTML
+      rawHtml = rawHtml.replace(
+        "</head>",
+        `<script>
+          const selectedSeverityLabel = ${JSON.stringify(clickedSeverity)};
+          const occurrences = ${JSON.stringify(findingsWithLines)};
+        </script></head>`
+      );
+
+      detailPanel.webview.html = rawHtml;
+
+      detailPanel.webview.onDidReceiveMessage(
+        (message) => {
+          if (message.command === "openAlertBanner" && message.alertItem) {
+            openAlertBanner(message.alertItem);
+          }
+        },
+        undefined,
+        context.subscriptions
+      );
+    }
+
+
+
   });
 
 }
