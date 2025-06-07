@@ -1086,10 +1086,25 @@ function showDashboard(context, findings) {
         );
       }
 
-      // מוסיפים שדה line לכל occurrence
+      function getFilePath(item) {
+        return (
+          item.file ||
+          item.File ||
+          item.filename ||
+          item.file_path ||
+          item.FilePath ||
+          item.Target ||
+          item.Location?.Path ||
+          item.location?.file ||
+          item.location?.path ||
+          null
+        );
+      }
+
       const findingsWithLines = findingsForType.map((item) => ({
         ...item,
         line: getLine(item),
+        file: getFilePath(item)
       }));
 
       // הזרקת מידע ל־HTML לפני סגירת </head>
@@ -1176,11 +1191,22 @@ function openAlertBanner(alertItem) {
 
   // שים לב, לשלב גם נתיב קובץ של האלרט אם קיים (ל-Gitleaks או Trivy)
   const filePath =
+    alertItem.file ||
+    alertItem.File ||
     alertItem.FilePath ||
     (alertItem.Location && alertItem.Location.Path) ||
-    alertItem.filename || alertItem.file_path ||
+    alertItem.filename ||
+    alertItem.file_path ||
     "";
-  const startLine = alertItem.StartLine || alertItem.line_number || 0;
+
+  const startLine =
+    alertItem.line ||
+    alertItem.line_number ||
+    alertItem.Line ||
+    alertItem.StartLine ||
+    (alertItem.Location && alertItem.Location.StartLine) ||
+    (alertItem.location && alertItem.location.start?.line) ||
+    0;
 
   html = html.replace(
     "</head>",
