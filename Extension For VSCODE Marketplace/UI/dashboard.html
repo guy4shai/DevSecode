@@ -14,7 +14,7 @@
         font-family: "Lexend Deca", sans-serif;
         margin: 0;
         padding: 20px;
-        background-color: #f8f9fa;
+        background-color: #eef2f5;
       }
       .header {
         display: flex;
@@ -112,11 +112,11 @@
     <div class="chart-container">
       <div class="chart-box">
         <div class="chart-labels" id="typeLabels"></div>
-        <canvas id="vulnerabilityTypeChart" style="height: 120px;"></canvas>
+        <canvas id="vulnerabilityTypeChart" style="height: 200px;"></canvas>
       </div>
       <div class="chart-box">
         <div class="chart-labels" id="severityLabels"></div>
-        <canvas id="severityChart"></canvas>
+        <canvas id="severityChart" style="height: 200px;"></canvas>
       </div>
     </div>
 
@@ -279,10 +279,14 @@
               {
                 data: Object.values(types),
                 backgroundColor: typeColors,
+                hoverOffset: 20,
               },
             ],
           },
           options: {
+            layout: {
+              padding: 10 // מוסיף מרווח בין הפאי לגבול הקנבס
+            },
             plugins: {
               legend: {
                 display: false,
@@ -316,14 +320,36 @@
         new Chart(document.getElementById("severityChart").getContext("2d"), {
           type: "doughnut",
           data: {
+            labels: severityOrder, 
             datasets: [
               {
                 data: severityData,
                 backgroundColor: severityColors,
+                hoverOffset: 20,
               },
             ],
           },
+          options: {
+            layout: {
+              padding: 10,
+            },
+            plugins: {
+              legend: {
+                display: false,
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    const label = context.label || "Unknown";
+                    const value = context.parsed || 0;
+                    return ` Quantity: ${value}`;
+                  },
+                },
+              },
+            },
+          },
         });
+
 
         const totalVulnerabilities = Object.values(types).reduce(
           (sum, val) => sum + val,
@@ -407,9 +433,13 @@
             datasets: [{
               data: idCounts,
               backgroundColor: idColors,
+              hoverOffset: 20,
             }]
           },
           options: {
+            layout: {
+              padding: 10 // מוסיף מרווח בין הפאי לגבול הקנבס
+            },
             plugins: {
               legend: {
                 display: false,  
@@ -443,12 +473,33 @@
         new Chart(document.getElementById("scaSeverityChart").getContext("2d"), {
           type: "doughnut",
           data: {
+            labels: severityOrder, 
             datasets: [
               {
                 data: severityCounts,
                 backgroundColor: severityColors,
+                hoverOffset: 20,
               },
             ],
+          },
+          options: {
+            layout: {
+              padding: 10,
+            },
+            plugins: {
+              legend: {
+                display: false,
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    const label = context.label || "Unknown";
+                    const value = context.parsed || 0;
+                    return ` Quantity: ${value}`;
+                  },
+                },
+              },
+            },
           },
         });
 
@@ -534,10 +585,14 @@
               {
                 data: typeCounts,
                 backgroundColor: typeColors,
+                hoverOffset: 20,
               },
             ],
           },
           options: {
+            layout: {
+              padding: 10 // מוסיף מרווח בין הפאי לגבול הקנבס
+            },
             plugins: {
               legend: {
                 display: false, 
@@ -571,14 +626,37 @@
         new Chart(document.getElementById("banditSeverityChart").getContext("2d"), {
           type: "doughnut",
           data: {
+            labels: severityOrder, 
             datasets: [
               {
                 data: severityCounts,
                 backgroundColor: severityColors,
+                hoverOffset: 20,
               },
             ],
           },
+          options: {
+            layout: {
+              padding: 10,
+            },
+            plugins: {
+              legend: {
+                display: false,
+              },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    const label = context.label || "Unknown";
+                    const value = context.parsed || 0;
+                    return ` Quantity: ${value}`;
+                  },
+                },
+              },
+            },
+          },
         });
+
+
 
         document.getElementById(
           "banditVulnerabilityCount"
