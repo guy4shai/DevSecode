@@ -347,6 +347,18 @@
                 },
               },
             },
+            onClick: (event, elements) => {
+              if (elements.length > 0) {
+                const chartIndex = elements[0].index;
+                const clickedLabel = severityOrder[chartIndex];
+
+                vscode.postMessage({
+                  type: "severitySliceClicked",
+                  label: clickedLabel,
+                  scanner: "gitleaks",
+                });
+              }
+            },
           },
         });
 
