@@ -1147,22 +1147,50 @@ function showDashboard(context, findings) {
         }
       );
 
-      const htmlPath = path.join(
-        context.extensionPath,
-        "UI",
-        "severityChartDetail.html"
-      );
+      const htmlPath = path.join(context.extensionPath, "UI", "severityChartDetail.html");
       let rawHtml = fs.readFileSync(htmlPath, "utf8");
 
-      // זיהוי סוג סורק לפי שדות ייחודיים
       function getScannerName(item) {
-        if (item.VulnerabilityID) return "trivy";
-        if (item.RuleID) return "gitleaks";
-        if (item.test_name) return "bandit";
+        const hasTrivyID = item.VulnerabilityID;
+        const hasGitleaksID = item.RuleID || item.rule_id || item.Rule || (item.rule && item.rule.id);
+        const hasBanditID = item.test_name;
+        if (hasTrivyID) return "trivy";
+        if (hasGitleaksID) return "gitleaks";
+        if (hasBanditID) return "bandit";
         return "unknown";
       }
 
-      // מקבל שורת קוד
+      function getSeverity(item) {
+        if (item.Entropy !== undefined) {
+          if (item.Entropy > 4.5) return "Critical";
+          if (item.Entropy > 4) return "High";
+          if (item.Entropy > 3.5) return "Medium";
+          return "Low";
+        }
+        if (item.Severity) {
+          const sev = item.Severity.toLowerCase();
+          if (sev === "critical") return "Critical";
+          if (sev === "high") return "High";
+          if (sev === "medium") return "Medium";
+          if (sev === "low") return "Low";
+        }
+        if (item.Level) {
+          const lvl = item.Level.toLowerCase();
+          if (lvl === "critical") return "Critical";
+          if (lvl === "high") return "High";
+          if (lvl === "medium") return "Medium";
+          if (lvl === "low") return "Low";
+        }
+        if (item.issue_severity) {
+          const issue = item.issue_severity.toLowerCase();
+          if (issue === "critical") return "Critical";
+          if (issue === "high") return "High";
+          if (issue === "medium") return "Medium";
+          if (issue === "low") return "Low";
+        }
+        return "Unknown";
+      }
+
       function getLine(item) {
         return (
           item.StartLine ||
@@ -1174,7 +1202,6 @@ function showDashboard(context, findings) {
         );
       }
 
-      // מקבל מיקום קובץ
       function getFilePath(item) {
         return (
           item.file ||
@@ -1190,32 +1217,32 @@ function showDashboard(context, findings) {
         );
       }
 
-      // איסוף כל התוצאות מכל הסורקים
       const allFindings = [
         ...(currentFindings || []),
         ...(currentTrivyFindings?.Results?.flatMap((r) => r.Vulnerabilities || []) || []),
         ...(currentBanditFindings || []),
       ];
 
+      const normalizedFindings = allFindings.map((item) => ({
+        ...item,
+        severity: getSeverity(item),
+        scanner: getScannerName(item),
+      }));
+
       const clickedSeverityLower = clickedSeverity.toLowerCase();
-      const normalizedClickedScanner = clickedScanner.trim().toLowerCase();
+      const clickedScannerLower = clickedScanner.trim().toLowerCase();
 
-      // פילטור לפי חומרה וסורק
-      const findingsForSeverity = allFindings.filter(item => {
-        const severity = (item.Severity || item.issue_severity || item.Level || "").toLowerCase();
-        const scanner = getScannerName(item);
-        return severity === clickedSeverityLower && scanner === normalizedClickedScanner;
-      });
+      const findingsForSeverity = normalizedFindings.filter((item) =>
+        item.severity.toLowerCase() === clickedSeverityLower &&
+        item.scanner.toLowerCase() === clickedScannerLower
+      );
 
-
-      // הוספת מיקום שורה וקובץ
       const findingsWithLines = findingsForSeverity.map((item) => ({
         ...item,
         line: getLine(item),
-        file: getFilePath(item)
+        file: getFilePath(item),
       }));
 
-      // החדרת המשתנים ל-HTML
       rawHtml = rawHtml.replace(
         "</head>",
         `<script>
@@ -1239,7 +1266,8 @@ function showDashboard(context, findings) {
 
 
 
-  });
+
+      });
 
 }
 
