@@ -3,7 +3,7 @@
   "icon": "UI/logo.png",
   "displayName": "DevSecode Scanner",
   "description": "Detect secrets secrets and vulnerabilities in your code.",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "publisher": "DevSecode",
   "engines": {
     "vscode": "^1.70.0"
