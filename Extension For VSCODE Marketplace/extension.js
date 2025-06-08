@@ -13,6 +13,7 @@ let alertsProvider;
 let currentFindings = [];
 let currentTrivyFindings = [];
 let currentBanditFindings = [];
+let diagnosticCollection;
 
 function getTempScanDir() {
   const workspacePath =
@@ -23,6 +24,10 @@ function getTempScanDir() {
 function activate(context) {
   alertsProvider = new AlertsProvider(context);
   vscode.window.registerTreeDataProvider("devsecodeAlerts", alertsProvider);
+
+  diagnosticCollection =
+    vscode.languages.createDiagnosticCollection("secretScanner");
+  context.subscriptions.push(diagnosticCollection);
 
   scaDiagnostics = vscode.languages.createDiagnosticCollection("sca");
   context.subscriptions.push(scaDiagnostics);
@@ -644,8 +649,6 @@ module.exports.runDastScan = runDastScan;
   );
   context.subscriptions.push(removeSecretCommand);
 
-  context.subscriptions.push(removeSecretCommand);
-
   context.subscriptions.push(openAlertBannerCommand);
   const generatePdfCommand = vscode.commands.registerCommand(
     "devsecode.generateCustomPDF",
@@ -770,11 +773,16 @@ module.exports.runDastScan = runDastScan;
       });*/
       const base64Images = Object.values(chartImages); // הופך את map לרשימה
 
-      await generatePDFReport(findings, config, {
-        trivyFindings,
-        semgrepFindings,
-        banditFindings
-      }, chartImages);      
+      await generatePDFReport(
+        findings,
+        config,
+        {
+          trivyFindings,
+          semgrepFindings,
+          banditFindings,
+        },
+        chartImages
+      );
 
       // ✅ פתיחת הדוח לאחר יצירתו
       vscode.window
@@ -919,16 +927,22 @@ function attachLinesToTrivy(trivyReportPath, requirementsPath) {
   console.log("✅ Line numbers added to Trivy report.");
 }
 
-function showDiagnostics(findings, context) {
-  const diagnosticCollection =
-    vscode.languages.createDiagnosticCollection("secretScanner");
-  context.subscriptions.push(diagnosticCollection); // ✅ חובה!
+function showDiagnostics(findings) {
+  console.log("🧪 Total findings received:", findings.length);
+  console.log("📂 Files found:", findings.map((f) => f.File));
 
-  const diagnosticsMap = new Map();
+  const diagnosticsMap = new Map(); // key: string
+  const diagnosticUriMap = new Map(); // key: string → Uri
 
   findings.forEach((finding) => {
-    const fileUri = vscode.Uri.file(finding.File);
+    const filePath = path.resolve(finding.File); // Normalize path
+    const fileKey = filePath;
+    const fileUri = vscode.Uri.file(filePath);
+
+    diagnosticUriMap.set(fileKey, fileUri);
+
     const line = finding.StartLine ? finding.StartLine - 1 : 0;
+
     const range = new vscode.Range(
       new vscode.Position(line, 0),
       new vscode.Position(line, 100)
@@ -949,17 +963,26 @@ Use environment variables or secret managers instead.`;
     );
     diagnostic.source = "Secret Scanner";
 
-    if (!diagnosticsMap.has(fileUri)) {
-      diagnosticsMap.set(fileUri, []);
+    if (!diagnosticsMap.has(fileKey)) {
+      diagnosticsMap.set(fileKey, []);
     }
-    diagnosticsMap.get(fileUri).push(diagnostic);
+    diagnosticsMap.get(fileKey).push(diagnostic);
   });
 
   diagnosticCollection.clear();
-  diagnosticsMap.forEach((diags, uri) => {
+  diagnosticsMap.forEach((diags, key) => {
+    const uri = diagnosticUriMap.get(key);
+    console.log(
+      "📂 Final diagnostics for:",
+      uri.fsPath,
+      "→",
+      diags.length,
+      "issues"
+    );
     diagnosticCollection.set(uri, diags);
   });
 }
+
 
 function showDashboard(context, findings) {
   const panel = vscode.window.createWebviewPanel(
@@ -1021,15 +1044,14 @@ function showDashboard(context, findings) {
   panel.webview.html = html;
 
   panel.webview.onDidReceiveMessage(async (message) => {
-
     if (message.type === "chartImage") {
       chartImages[message.chartId] = {
         image: message.dataUrl,
-        legend: message.legend || []
+        legend: message.legend || [],
       };
       console.log(`📊 Got image & legend: ${message.chartId}`);
     }
-  
+
     if (message.type === "vulnerabilityTypeClicked") {
       const clickedType = message.label;
 
@@ -1055,13 +1077,15 @@ function showDashboard(context, findings) {
       // מיזוג כל הסריקות
       const allFindings = [
         ...(currentFindings || []),
-        ...(currentTrivyFindings?.Results?.flatMap((r) => r.Vulnerabilities || []) || []),
+        ...(currentTrivyFindings?.Results?.flatMap(
+          (r) => r.Vulnerabilities || []
+        ) || []),
         ...(currentBanditFindings || []),
       ];
 
       const clickedTypeLower = clickedType.toLowerCase();
 
-      const findingsForType = allFindings.filter(item => {
+      const findingsForType = allFindings.filter((item) => {
         const ruleId = item.RuleID || item.ruleId || "";
         const vulnId = item.VulnerabilityID || "";
         const testName = item.test_name || "";
@@ -1072,7 +1096,6 @@ function showDashboard(context, findings) {
           testName.toLowerCase() === clickedTypeLower
         );
       });
-
 
       // פונקציה שמוציאה שורה תקינה מכל ממצא (אם קיימת)
       function getLine(item) {
@@ -1104,7 +1127,7 @@ function showDashboard(context, findings) {
       const findingsWithLines = findingsForType.map((item) => ({
         ...item,
         line: getLine(item),
-        file: getFilePath(item)
+        file: getFilePath(item),
       }));
 
       // הזרקת מידע ל־HTML לפני סגירת </head>
@@ -1127,7 +1150,6 @@ function showDashboard(context, findings) {
         undefined,
         context.subscriptions
       );
-
     }
 
     //************************************************
@@ -1147,12 +1169,20 @@ function showDashboard(context, findings) {
         }
       );
 
-      const htmlPath = path.join(context.extensionPath, "UI", "severityChartDetail.html");
+      const htmlPath = path.join(
+        context.extensionPath,
+        "UI",
+        "severityChartDetail.html"
+      );
       let rawHtml = fs.readFileSync(htmlPath, "utf8");
 
       function getScannerName(item) {
         const hasTrivyID = item.VulnerabilityID;
-        const hasGitleaksID = item.RuleID || item.rule_id || item.Rule || (item.rule && item.rule.id);
+        const hasGitleaksID =
+          item.RuleID ||
+          item.rule_id ||
+          item.Rule ||
+          (item.rule && item.rule.id);
         const hasBanditID = item.test_name;
         if (hasTrivyID) return "trivy";
         if (hasGitleaksID) return "gitleaks";
@@ -1219,7 +1249,9 @@ function showDashboard(context, findings) {
 
       const allFindings = [
         ...(currentFindings || []),
-        ...(currentTrivyFindings?.Results?.flatMap((r) => r.Vulnerabilities || []) || []),
+        ...(currentTrivyFindings?.Results?.flatMap(
+          (r) => r.Vulnerabilities || []
+        ) || []),
         ...(currentBanditFindings || []),
       ];
 
@@ -1232,9 +1264,10 @@ function showDashboard(context, findings) {
       const clickedSeverityLower = clickedSeverity.toLowerCase();
       const clickedScannerLower = clickedScanner.trim().toLowerCase();
 
-      const findingsForSeverity = normalizedFindings.filter((item) =>
-        item.severity.toLowerCase() === clickedSeverityLower &&
-        item.scanner.toLowerCase() === clickedScannerLower
+      const findingsForSeverity = normalizedFindings.filter(
+        (item) =>
+          item.severity.toLowerCase() === clickedSeverityLower &&
+          item.scanner.toLowerCase() === clickedScannerLower
       );
 
       const findingsWithLines = findingsForSeverity.map((item) => ({
@@ -1263,12 +1296,7 @@ function showDashboard(context, findings) {
         context.subscriptions
       );
     }
-
-
-
-
-      });
-
+  });
 }
 
 function openAlertBanner(alertItem) {
@@ -1499,7 +1527,12 @@ class AlertsProvider {
           "No description";
         const severity = item.severity || item.issue_severity;
         const filePath =
-          item.File || item.Path || item.filename || item.file_path || item.Location?.Path || "";
+          item.File ||
+          item.Path ||
+          item.filename ||
+          item.file_path ||
+          item.Location?.Path ||
+          "";
         item.FilePath = filePath;
         const alertItem = new vscode.TreeItem(
           label,
