@@ -3,7 +3,7 @@
   "icon": "UI/logo.png",
   "displayName": "DevSecode Secret Scanner",
   "description": "Detect secrets and credentials in your code with Gitleaks.",
-  "version": "0.0.13",
+  "version": "0.0.17",
   "publisher": "DevSecode",
   "engines": {
     "vscode": "^1.70.0"
@@ -127,9 +127,9 @@
   },
   "dependencies": {
     "gitleaks": "^1.0.0",
+    "glob": "^8.1.0",
     "nodemailer": "^7.0.3",
     "open": "^10.1.2",
-    "pdfkit": "^0.17.1",
-    "glob": "^8.1.0"
+    "pdfkit": "^0.17.1"
   }
 }
