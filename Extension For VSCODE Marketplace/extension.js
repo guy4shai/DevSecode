@@ -82,7 +82,7 @@ function activate(context) {
           getTempScanDir(),
           "trivy_report.json"
         ); //Json מוסתר
-        //const trivyReportPath = path.join(rootPath, "trivy_report.json");
+
         const trivyCommand = trivyConfigToUse
           ? `trivy fs "${rootPath}" --config "${trivyConfigToUse}" --format json --output "${trivyReportPath}"`
           : `trivy fs "${rootPath}" --format json --output "${trivyReportPath}"`;
@@ -139,9 +139,7 @@ function activate(context) {
                     showDiagnostics(findings, context);
                   }
 
-                  vscode.window.showInformationMessage(
-                    "Opening dashboard..."
-                  );
+                  vscode.window.showInformationMessage("Opening dashboard...");
 
                   cp.exec(
                     trivyCommand,
@@ -252,10 +250,7 @@ function activate(context) {
                         getTempScanDir(),
                         "bandit_report.json"
                       ); // Json מוסתר
-                      // const banditReportPath = path.join(
-                      //   rootPath,
-                      //   "bandit_report.json"
-                      // );
+
                       const banditCommand = `bandit -r "${rootPath}" --exclude "${rootPath}/node_modules,${rootPath}/venv" -f json -o "${banditReportPath}"`;
 
                       const semgrepReportPath = path.join(
@@ -263,10 +258,6 @@ function activate(context) {
                         "semgrep_report.json"
                       ); // Json מוסתר
 
-                      // const semgrepReportPath = path.join(
-                      //   rootPath,
-                      //   "semgrep_report.json"
-                      // );
                       const semgrepCommand = `semgrep --config auto --json --output "${semgrepReportPath}" "${rootPath}"`;
 
                       const util = require("util");
@@ -363,9 +354,10 @@ function activate(context) {
                           convertTrufflehogToGitleaksFormat(
                             trufflehogReportPath
                           );
+
                         if (trufflehogFindings.length > 0) {
-                          currentFindings =
-                            currentFindings.concat(trufflehogFindings);
+                           currentFindings =
+                              currentFindings.concat(trufflehogFindings);
                           showDiagnostics(currentFindings);
                           vscode.window.showInformationMessage(
                             `✅ Loaded ${trufflehogFindings.length} TruffleHog findings.`
