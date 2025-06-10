@@ -4,6 +4,7 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const chartImages = {};
+const { runFullContainerScan } = require("./utils/containerReport");
 
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
 const { getFixedVersionFromOSV } = require("./utils/osvApiHelper");
@@ -14,6 +15,7 @@ let currentFindings = [];
 let currentTrivyFindings = [];
 let currentBanditFindings = [];
 let diagnosticCollection;
+let currentContainerFindings = [];
 
 function getTempScanDir() {
   const workspacePath =
@@ -200,53 +202,32 @@ function activate(context) {
 
                       // Ask for container image or "all"
                       const containerImage = await vscode.window.showInputBox({
-                        placeHolder:
-                          "e.g., nginx:1.25-alpine   •   or type 'all' to scan every image in repo",
+                        placeHolder: "e.g., nginx:1.25-alpine or type 'all' to scan every image in repo",
                         prompt:
                           "Enter the Docker image you want to scan (or 'all' to scan every image referenced in your project)",
                       });
 
                       if (containerImage) {
-                        if (containerImage.trim().toLowerCase() === "all") {
-                          const images = collectImages(rootPath);
-                          if (images.length === 0) {
-                            vscode.window.showWarningMessage(
-                              "No container images found in repository files."
-                            );
-                          } else {
-                            for (const img of images) {
-                              const {
-                                runFullContainerScan,
-                              } = require("./utils/containerReport");
+                        const targets = containerImage.trim().toLowerCase() === 'all'
+                          ? collectImages(rootPath)
+                          : [containerImage];
 
-                              await runFullContainerScan(
-                                containerImage,
-                                rootPath,
-                                trivyConfigToUse,
-                                null // אין לנו requirements.txt, אנחנו מחפשים בתוך Dockerfile
-                              );
-
-                              vscode.window.showInformationMessage(
-                                "📄 ContainerScanning_Report.json generated!"
-                              );
-                            }
-                          }
-                        } else {
-                          const {
-                            runFullContainerScan,
-                          } = require("./utils/containerReport");
-
-                          await runFullContainerScan(
-                            containerImage,
-                            rootPath,
-                            trivyConfigToUse,
-                            null
-                          );
-
-                          vscode.window.showInformationMessage(
-                            "📄 ContainerScanning_Report.json generated!"
-                          );
+                        const reports = [];
+                        for (const img of targets) {
+                          vscode.window.showInformationMessage(`🔍 Scanning ${img}...`);
+                          const rpt = await runFullContainerScan(img, rootPath, trivyConfigToUse);
+                          reports.push(rpt);
                         }
+
+                        // Combine and write once
+                        const combined = {
+                          generated_at: new Date().toISOString(),
+                          scanned_images: reports.map(r => r.metadata.ArtifactName),
+                          reports,
+                        };
+                        const outFile = path.join(rootPath, 'ContainerScanning_Report.json');
+                        fs.writeFileSync(outFile, JSON.stringify(combined, null, 2));
+                        vscode.window.showInformationMessage('📄 ContainerScanning_Report.json generated!');
                       }
                       const banditReportPath = path.join(
                         getTempScanDir(),
@@ -632,37 +613,41 @@ module.exports.runDastScan = runDastScan;
     },
   });
 
-  function collectImages(rootPath) {
-    const images = new Set();
+  async function runContainerScan(imageName, rootPath, trivyConfigToUse) {
+  const safeName = imageName.replace(/[^a-zA-Z0-9_.-]/g, "_");
+  const imageReportPath = path.join(rootPath, `trivy_image_${safeName}.json`);
+  const trivyImageCommand = trivyConfigToUse
+    ? `trivy image "${imageName}" --config "${trivyConfigToUse}" --format json --output "${imageReportPath}"`
+    : `trivy image "${imageName}" --format json --output "${imageReportPath}"`;
 
-    const add = (img) => {
-      if (img && !img.startsWith("${")) images.add(img.trim());
-    };
+  return new Promise((resolve) => {
+    cp.exec(trivyImageCommand, { maxBuffer: 1024 * 1000 }, (err) => {
+      if (err) {
+        vscode.window.showErrorMessage(
+          `Container scan failed for ${imageName}. Ensure Trivy is installed and Docker is running.`
+        );
+        return resolve();
+      }
 
-    // 1. All *.yaml / *.yml (docker-compose, k8s)
-    glob
-      .sync("**/*.{yaml,yml}", { cwd: rootPath, nodir: true })
-      .forEach((f) => {
-        const text = fs.readFileSync(path.join(rootPath, f), "utf8");
-        const re = /image:\s*["']?([^"'\s#]+)(?=["'\s#]|$)/gi;
-        let m;
-        while ((m = re.exec(text))) add(m[1]);
-      });
+      let containerData = {};
+      try {
+        containerData = JSON.parse(fs.readFileSync(imageReportPath, "utf8"));
+        vscode.window.showInformationMessage(
+          `✅ Container scan for ${imageName} completed.`
+        );
+      } catch {
+        vscode.window.showWarningMessage(
+          `⚠️ Failed to parse Trivy report for ${imageName}.`
+        );
+      }
 
-    // 2. Any file named *Dockerfile*  – look for BOTH  “FROM …” and “image: …”
-    glob.sync("**/Dockerfile*", { cwd: rootPath, nodir: true }).forEach((f) => {
-      const text = fs.readFileSync(path.join(rootPath, f), "utf8");
-      text.split(/\r?\n/).forEach((line) => {
-        const from = line.match(/^\s*FROM\s+([^\s]+).*$/i);
-        if (from) add(from[1]);
-
-        const img = line.match(/image:\s*["']?([^"'\s#]+)(?=["'\s#]|$)/i);
-        if (img) add(img[1]);
-      });
+      currentContainerFindings =
+        containerData.Results?.flatMap((r) => r.Vulnerabilities || []) || [];
+      currentContainerFindings._rawImageReport = containerData;
+      resolve();
     });
-
-    return Array.from(images);
-  }
+  });
+}
   context.subscriptions.push(disposable);
 
   let openAlertBannerCommand = vscode.commands.registerCommand(

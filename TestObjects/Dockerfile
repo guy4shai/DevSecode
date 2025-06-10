@@ -1,3 +1,3 @@
 #ContainerScanning_TestObject/Dockerfile
-FROM debian:9-slim
+FROM alpine:3.12.2
 
