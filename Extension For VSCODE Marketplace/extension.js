@@ -140,7 +140,7 @@ function activate(context) {
                   }
 
                   vscode.window.showInformationMessage(
-                    "Secret Scan complete. Opening dashboard..."
+                    "Opening dashboard..."
                   );
 
                   cp.exec(
@@ -321,6 +321,64 @@ function activate(context) {
                         } catch (e) {
                           currentBanditFindings = [];
                         }
+
+                        const trufflehogReportPath = path.join(
+                          getTempScanDir(),
+                          "trufflehog_report.json"
+                        );
+
+                        const trufflehogCommand = `trufflehog filesystem --json "${rootPath}"`;
+
+                        try {
+                          const { stdout } = await exec(trufflehogCommand, {
+                            maxBuffer: 1024 * 1000,
+                          });
+
+                          // סינון רק לשורות שמכילות ממצאים (יש להן "DetectorName")
+                          const findingLines = stdout
+                            .split("\n")
+                            .filter((line) => line.includes('"DetectorName"'));
+
+                          fs.writeFileSync(
+                            trufflehogReportPath,
+                            findingLines.join("\n"),
+                            "utf8"
+                          );
+
+                          vscode.window.showInformationMessage(
+                            `✅ TruffleHog scan completed. ${findingLines.length} findings saved.`
+                          );
+                        } catch (e) {
+                          vscode.window.showWarningMessage(
+                            "❌ TruffleHog scan failed."
+                          );
+                          console.error("TruffleHog error:", e.stderr || e);
+                        }
+
+                        const {
+                          convertTrufflehogToGitleaksFormat,
+                        } = require("./utils/trufflehogConverter");
+
+                        const trufflehogFindings =
+                          convertTrufflehogToGitleaksFormat(
+                            trufflehogReportPath
+                          );
+                        if (trufflehogFindings.length > 0) {
+                          currentFindings =
+                            currentFindings.concat(trufflehogFindings);
+                          showDiagnostics(currentFindings);
+                          vscode.window.showInformationMessage(
+                            `✅ Loaded ${trufflehogFindings.length} TruffleHog findings.`
+                          );
+                        }
+
+                        fs.writeFileSync(
+                          path.join(
+                            getTempScanDir(),
+                            "gitleaks_style_trufflehog.json"
+                          ),
+                          JSON.stringify(trufflehogFindings, null, 2)
+                        );
 
                         //  await runDastScan(rootPath);
                         vscode.commands.registerCommand(
@@ -929,7 +987,10 @@ function attachLinesToTrivy(trivyReportPath, requirementsPath) {
 
 function showDiagnostics(findings) {
   console.log("🧪 Total findings received:", findings.length);
-  console.log("📂 Files found:", findings.map((f) => f.File));
+  console.log(
+    "📂 Files found:",
+    findings.map((f) => f.File)
+  );
 
   const diagnosticsMap = new Map(); // key: string
   const diagnosticUriMap = new Map(); // key: string → Uri
@@ -982,7 +1043,6 @@ Use environment variables or secret managers instead.`;
     diagnosticCollection.set(uri, diags);
   });
 }
-
 
 function showDashboard(context, findings) {
   const panel = vscode.window.createWebviewPanel(
