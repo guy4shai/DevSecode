@@ -1,16 +1,19 @@
 {
-  "generated_at": "2025-06-10T18:38:55.489Z",
+  "generated_at": "2025-06-10T19:25:04.540Z",
   "scanned_images": [
-    "alpine:3.12.2"
+    "alpine:3.12.2",
+    "ubuntu:18.04"
   ],
   "reports": [
     {
       "summary_line": "Total vulnerabilities: 46 (CRITICAL: 4, HIGH: 32, MEDIUM: 8, LOW: 2, UNKNOWN: 0)",
       "metadata": {
         "ArtifactName": "alpine:3.12.2",
-        "CreatedAt": "2025-06-10T18:38:55.489Z",
+        "CreatedAt": "2025-06-10T19:25:02.181Z",
         "ImageID": "sha256:b14afc6dfb98a401691d5625cd08aa8459c847cd809101c4802907916a1e4da5",
-        "Digest": "unknown"
+        "Digest": "unknown",
+        "DockerfilePath": "c:\\Users\\Eden\\Desktop\\Githuib\\DevSecode\\TestObjects\\Dockerfile",
+        "DockerfileLine": 2
       },
       "vulnerability_summary": {
         "CRITICAL": 4,
@@ -1373,6 +1376,27 @@
           "recommendation": "Upgrade ssl_client to 1.31.1-r21"
         }
       ],
+      "next_steps": "After applying fixes, rerun DevSecode container scan to verify remediation."
+    },
+    {
+      "summary_line": "Total vulnerabilities: 0 (CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0, UNKNOWN: 0)",
+      "metadata": {
+        "ArtifactName": "ubuntu:18.04",
+        "CreatedAt": "2025-06-10T19:25:04.540Z",
+        "ImageID": "sha256:f9a80a55f492e823bf5d51f1bd5f87ea3eed1cb31788686aa99a2fb61a27af6a",
+        "Digest": "unknown",
+        "DockerfilePath": "c:\\Users\\Eden\\Desktop\\Githuib\\DevSecode\\TestObjects\\Dockerfile",
+        "DockerfileLine": 3
+      },
+      "vulnerability_summary": {
+        "CRITICAL": 0,
+        "HIGH": 0,
+        "MEDIUM": 0,
+        "LOW": 0,
+        "UNKNOWN": 0
+      },
+      "top_vulnerabilities": [],
+      "recommendations": [],
       "next_steps": "After applying fixes, rerun DevSecode container scan to verify remediation."
     }
   ]
