@@ -1,5 +1,6 @@
 const vscode = require("vscode");
 const cp = require("child_process");
+const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -22,6 +23,28 @@ function getTempScanDir() {
     vscode.workspace.workspaceFolders?.[0].uri.fsPath || "default";
   return path.join(os.tmpdir(), "devsecode", path.basename(workspacePath));
 }
+function runSemgrepCommand(commandArgs, reportPath) {
+  return new Promise((resolve, reject) => {
+    const semgrep = spawn("semgrep", commandArgs, { shell: true });
+
+    semgrep.stdout.on("data", (data) => {
+      console.log(`[semgrep stdout]: ${data}`);
+    });
+
+    semgrep.stderr.on("data", (data) => {
+      console.error(`[semgrep stderr]: ${data}`);
+    });
+
+    semgrep.on("close", (code) => {
+      if (code === 0 && fs.existsSync(reportPath)) {
+        resolve();
+      } else {
+        reject(new Error(`Semgrep exited with code ${code}`));
+      }
+    });
+  });
+}
+
 
 function activate(context) {
   alertsProvider = new AlertsProvider(context);
@@ -257,25 +280,26 @@ function activate(context) {
                         "semgrep_report.json"
                       ); // Json מוסתר
 
-                      const semgrepCommand = `semgrep --config auto --json --output "${semgrepReportPath}" "${rootPath}"`;
+                      const semgrepCommand = `semgrep --config=auto --json --output=${semgrepReportPath} ${rootPath}`;
 
                       const util = require("util");
                       const exec = util.promisify(cp.exec);
 
                       (async () => {
+                        const semgrepArgs = [
+                          "--config=auto",
+                          "--json",
+                          "--output", semgrepReportPath,
+                          rootPath,
+                        ];
+                        
                         try {
-                          await exec(semgrepCommand, {
-                            maxBuffer: 1024 * 1000,
-                          });
-                          vscode.window.showInformationMessage(
-                            "✅ Semgrep scan completed."
-                          );
+                          await runSemgrepCommand(semgrepArgs, semgrepReportPath);
+                          vscode.window.showInformationMessage("✅ Semgrep scan completed.");
                         } catch (e) {
-                          vscode.window.showWarningMessage(
-                            "❌ Semgrep scan failed."
-                          );
-                          console.error("Semgrep error:", e.stderr || e);
-                        }
+                          vscode.window.showWarningMessage("❌ Semgrep scan failed.");
+                          console.error("Semgrep error:", e);
+                        }                        
 
                         try {
                           await exec(banditCommand, { maxBuffer: 1024 * 1000 });
