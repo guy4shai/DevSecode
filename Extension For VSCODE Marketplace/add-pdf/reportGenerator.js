@@ -6,7 +6,7 @@ function getSeverity(entropy) {
   if (entropy > 4.5) return { level: 'Critical', color: '#B33A3A' };
   if (entropy > 4.0) return { level: 'High', color: '#FF6F61' };
   if (entropy > 3.5) return { level: 'Medium', color: '#FFB347' };
-  return { level: 'Low', color: '#FFF176' };
+  return { level: 'Low', color: '#FFC107' };
 }
 
 function getRecommendation(ruleID) {
@@ -108,7 +108,7 @@ function renderChartWithLegend(doc, chartData, titleText, fixedY = null) {
   let legendY = chartY;
 
   doc.fillColor('black');
-  doc.font('Helvetica-Bold').fontSize(14).text(titleText, legendX, legendY, { underline: true });
+  doc.font('Times-Bold').fontSize(14).text(titleText, legendX, legendY, { underline: true });
   legendY += 25;
 
   legendItems.forEach(({ label, color }) => {
@@ -118,7 +118,7 @@ function renderChartWithLegend(doc, chartData, titleText, fixedY = null) {
 
     const boxSize = 10;
     doc.fillColor(color).rect(legendX, legendY, boxSize, boxSize).fill();
-    doc.fillColor('black').font('Helvetica').fontSize(10).text(` ${label}`, legendX + boxSize + 5, legendY - 1);
+    doc.fillColor('black').font('Times-Bold').fontSize(12).text(` ${label}`, legendX + boxSize + 5, legendY - 1);
     legendY += 20;
   });
 
@@ -141,6 +141,7 @@ async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Ima
   const jsonPath = path.join(outputDir, `DevSecode-Report-${timestamp}.json`);
 
   const doc = new PDFDocument({ margin: 50 });
+  doc.font('Times-Roman'); // ← פונט ברירת מחדל לכל הדוח
   doc.pipe(fs.createWriteStream(pdfPath));
 
   const sections = [
@@ -151,14 +152,14 @@ async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Ima
  // doc.addPage();
 
   // כותרת פתיחה
-  doc.font('Helvetica-Bold').fontSize(26).fillColor('black').text('DevSecode Security Report', {
+  doc.font('Times-Bold').fontSize(26).fillColor('black').text('DevSecode Security Report', {
     align: 'center',
   });
   doc.moveDown(1);
   
   // שם הפרויקט
   const projectName = path.basename(workspacePath);
-  doc.font('Helvetica').fontSize(16).text(`Project: ${projectName}`, {
+  doc.font('Times-Roman').fontSize(16).text(`Project: ${projectName}`, {
     align: 'center',
   });
   doc.moveDown(1);
@@ -183,7 +184,7 @@ async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Ima
         isFirstSection = false;
       }
   
-      doc.font('Helvetica-Bold').fontSize(18).text(title, { align: 'center' });
+      doc.font('Times-Bold').fontSize(18).text(title, { align: 'center' });
       renderChartWithLegend(doc, base64Images[typeKey], 'Findings by Type:', 100);
       renderChartWithLegend(doc, base64Images[severityKey], 'Findings by Severity:', 420);
     }
@@ -197,24 +198,25 @@ async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Ima
     filteredFindings.forEach(finding => {
       doc.addPage();
       const { level, color } = getSeverity(finding.Entropy);
-      doc.fillColor(color).font('Helvetica-Bold').fontSize(16).text(`Severity: ${level}`);
-      doc.fillColor('black').fontSize(12).font('Helvetica');
-      doc.font('Helvetica-Bold').text('Tool: ', { continued: true });
-      doc.font('Helvetica').text(finding.tool); doc.moveDown(0.5);
-      doc.font('Helvetica-Bold').text('File: ', { continued: true });
-      doc.font('Helvetica').text(finding.File); doc.moveDown(0.5);
-      doc.font('Helvetica-Bold').text('Line: ', { continued: true });
-      doc.font('Helvetica').text(finding.StartLine.toString()); doc.moveDown(0.5);
-      doc.font('Helvetica-Bold').text('Rule: ', { continued: true });
-      doc.font('Helvetica').text(finding.RuleID); doc.moveDown(0.5);
-      doc.font('Helvetica-Bold').text('Description: ', { continued: true });
-      doc.font('Helvetica').text(finding.Description || 'N/A'); doc.moveDown(0.5);
+      doc.fillColor(color).font('Times-Bold').fontSize(16).text(`Severity: ${level}`);
+      doc.moveDown(1);
+      doc.fillColor('black').fontSize(12).font('Times-Roman');
+      doc.font('Times-Bold').text('Tool: ', { continued: true });
+      doc.font('Times-Roman').text(finding.tool); doc.moveDown(0.5);
+      doc.font('Times-Bold').text('File: ', { continued: true });
+      doc.font('Times-Roman').text(finding.File); doc.moveDown(0.5);
+      doc.font('Times-Bold').text('Line: ', { continued: true });
+      doc.font('Times-Roman').text(finding.StartLine.toString()); doc.moveDown(0.5);
+      doc.font('Times-Bold').text('Rule: ', { continued: true });
+      doc.font('Times-Roman').text(finding.RuleID); doc.moveDown(0.5);
+      doc.font('Times-Bold').text('Description: ', { continued: true });
+      doc.font('Times-Roman').text(finding.Description || 'N/A'); doc.moveDown(0.5);
       if (finding.Match) {
-        doc.font('Helvetica-Bold').text('Snippet: ', { continued: true });
-        doc.font('Helvetica').text(finding.Match); doc.moveDown(0.5);
+        doc.font('Times-Bold').text('Snippet: ', { continued: true });
+        doc.font('Times-Roman').text(finding.Match); doc.moveDown(0.5);
       }
-      doc.font('Helvetica-Bold').text('Recommendation: ', { continued: true });
-      doc.font('Helvetica').text(getRecommendation(finding.RuleID));
+      doc.font('Times-Bold').text('Recommendation: ', { continued: true });
+      doc.font('Times-Roman').text(getRecommendation(finding.RuleID));
       doc.moveDown(1.5);
     });
   }
