@@ -9,6 +9,7 @@ const { runFullContainerScan } = require("./utils/containerReport");
 
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
 const { getFixedVersionFromOSV } = require("./utils/osvApiHelper");
+const { showBanditDiagnostics, registerBanditAutoFixes} = require("./banditAutoFixer");
 
 // const { runDastScan } = require("./dastScan");
 let alertsProvider;
@@ -23,28 +24,6 @@ function getTempScanDir() {
     vscode.workspace.workspaceFolders?.[0].uri.fsPath || "default";
   return path.join(os.tmpdir(), "devsecode", path.basename(workspacePath));
 }
-function runSemgrepCommand(commandArgs, reportPath) {
-  return new Promise((resolve, reject) => {
-    const semgrep = spawn("semgrep", commandArgs, { shell: true });
-
-    semgrep.stdout.on("data", (data) => {
-      console.log(`[semgrep stdout]: ${data}`);
-    });
-
-    semgrep.stderr.on("data", (data) => {
-      console.error(`[semgrep stderr]: ${data}`);
-    });
-
-    semgrep.on("close", (code) => {
-      if (code === 0 && fs.existsSync(reportPath)) {
-        resolve();
-      } else {
-        reject(new Error(`Semgrep exited with code ${code}`));
-      }
-    });
-  });
-}
-
 
 function activate(context) {
   alertsProvider = new AlertsProvider(context);
@@ -69,7 +48,7 @@ function activate(context) {
         );
         return;
       }
-
+    
       let rootPath = uri?.fsPath
         ? path.dirname(uri.fsPath)
         : workspaceFolders[0].uri.fsPath;
@@ -87,7 +66,7 @@ function activate(context) {
       const command = configToUse
         ? `gitleaks detect --config="${configToUse}" --no-git --source="${rootPath}" --redact --report-format=json --report-path="${reportPath}"`
         : `gitleaks detect --no-git --source="${rootPath}" --redact --report-format=json --report-path="${reportPath}"`;
-      cp.exec("gitleaks version", (versionErr) => {
+        cp.exec("gitleaks version", (versionErr) => {
         if (versionErr) {
           vscode.window.showErrorMessage(
             "Gitleaks is not installed or not available in PATH. Install it from https://github.com/gitleaks/gitleaks/releases"
@@ -275,41 +254,19 @@ function activate(context) {
 
                       const banditCommand = `bandit -r "${rootPath}" --exclude "${rootPath}/node_modules,${rootPath}/venv" -f json -o "${banditReportPath}"`;
 
-                      const semgrepReportPath = path.join(
-                        getTempScanDir(),
-                        "semgrep_report.json"
-                      ); // Json מוסתר
-
-                      const semgrepCommand = `semgrep --config=auto --json --output=${semgrepReportPath} ${rootPath}`;
-
                       const util = require("util");
                       const exec = util.promisify(cp.exec);
 
-                      (async () => {
-                        const semgrepArgs = [
-                          "--config=auto",
-                          "--json",
-                          "--output", semgrepReportPath,
-                          rootPath,
-                        ];
-                        
-                        try {
-                          await runSemgrepCommand(semgrepArgs, semgrepReportPath);
-                          vscode.window.showInformationMessage("✅ Semgrep scan completed.");
-                        } catch (e) {
-                          vscode.window.showWarningMessage("❌ Semgrep scan failed.");
-                          console.error("Semgrep error:", e);
-                        }                        
-
+                      (async () => {                        
                         try {
                           await exec(banditCommand, { maxBuffer: 1024 * 1000 });
                           vscode.window.showInformationMessage(
                             "✅ Bandit scan completed."
                           );
+                         
                         } catch (e) {
                           console.error("Bandit error:", e.stderr || e);
                         }
-
                         let banditData = [];
 
                         try {
@@ -329,7 +286,9 @@ function activate(context) {
                         vscode.window.showInformationMessage(
                           "Bandit scan completed successfully."
                         );
-
+                        currentBanditFindings = banditData.results || [];
+                        registerBanditAutoFixes(context);
+                        showBanditDiagnostics(context, getTempScanDir);
                         try {
                           currentBanditFindings = banditData.results || [];
                         } catch (e) {
@@ -356,6 +315,8 @@ function activate(context) {
           }
         );
       });
+      
+  
 
       // 🎯 רישום hover על requirements.txt
       context.subscriptions.push(
@@ -490,7 +451,7 @@ function activate(context) {
       );
     }
   );
-
+  
   // 🔒 DAST integration directly embedded into DevSecode Extension
   // This is a standalone function based on the logic of dast.py, rewritten in Node.js to be part of the extension.
 
@@ -559,7 +520,7 @@ function activate(context) {
     vscode.window.showWarningMessage("⚠️ DAST scan failed.");
     console.error("DAST error:", err);
   }
-};
+
 
 module.exports.runDastScan = runDastScan;
 */
@@ -734,14 +695,8 @@ module.exports.runDastScan = runDastScan;
 
       const trivyPath = path.join(getTempScanDir(), "trivy_report.json");
       const banditPath = path.join(getTempScanDir(), "bandit_report.json");
-      const semgrepPath = path.join(getTempScanDir(), "semgrep_report.json");
-
-      // const trivyPath = path.join(workspacePath, "trivy_report.json");
-      // const semgrepPath = path.join(workspacePath, "semgrep_report.json");
-      // const banditPath = path.join(workspacePath, "bandit_report.json");
 
       let trivyFindings = [];
-      let semgrepFindings = [];
       let banditFindings = [];
 
       if (fs.existsSync(trivyPath)) {
@@ -750,16 +705,6 @@ module.exports.runDastScan = runDastScan;
         } catch (e) {
           vscode.window.showWarningMessage(
             "⚠️ Failed to load trivy_report.json."
-          );
-        }
-      }
-
-      if (fs.existsSync(semgrepPath)) {
-        try {
-          semgrepFindings = JSON.parse(fs.readFileSync(semgrepPath, "utf-8"));
-        } catch (e) {
-          vscode.window.showWarningMessage(
-            "⚠️ Failed to load semgrep_report.json."
           );
         }
       }
@@ -784,11 +729,6 @@ module.exports.runDastScan = runDastScan;
         return;
       }
 
-      /*const reportPath = await generatePDFReport(findings, config, {
-        trivyFindings,
-        semgrepFindings,
-        banditFindings,
-      });*/
       const base64Images = Object.values(chartImages); // הופך את map לרשימה
 
       await generatePDFReport(
@@ -796,7 +736,6 @@ module.exports.runDastScan = runDastScan;
         config,
         {
           trivyFindings,
-          semgrepFindings,
           banditFindings,
         },
         chartImages
@@ -848,13 +787,8 @@ module.exports.runDastScan = runDastScan;
 
   context.subscriptions.push(dashboardStatusBarButton);
 }
-
+  
 function watchGitleaksReport(context) {
-  // const reportPath = path.join(
-  //   context.extensionPath,
-  //   "UI",
-  //   "gitleaks_report.json"
-  // );
   const reportPath = path.join(getTempScanDir(), "gitleaks_report.json");
 
   if (!fs.existsSync(reportPath)) {

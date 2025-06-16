@@ -1,0 +1,22 @@
+// fixers/B201.js
+const vscode = require("vscode");
+
+module.exports = async function fixB201(document, range) {
+  const edit = new vscode.WorkspaceEdit();
+  const lineText = document.lineAt(range.start.line).text;
+
+  // רק אם זה מכיל בדיוק debug=True
+  if (!lineText.includes("debug=True")) {
+    vscode.window.showWarningMessage("לא נמצא debug=True בשורה. לא מתבצע תיקון.");
+    return edit;
+  }
+
+  const newText = lineText.replace("debug=True", "debug=False");
+  const rangeToReplace = new vscode.Range(
+    new vscode.Position(range.start.line, 0),
+    new vscode.Position(range.start.line, lineText.length)
+  );
+
+  edit.replace(document.uri, rangeToReplace, newText);
+  return edit;
+};

@@ -16,7 +16,7 @@ discord_webhook = "https://discord.com/api/webhooks/1234567890/ABCDEFGHIJKLMNOPQ
 
 # --- Database Credentials ---
 db_user = "admin"
-db_password = "P@ssw0rd!"
+db_password = "ddf"
 mysql_uri = "mysql://admin:P@ssw0rd!@localhost:3306/testdb"
 postgres_uri = "postgresql://admin:admin123@localhost:5432/exampledb"
 

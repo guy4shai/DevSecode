@@ -30,7 +30,7 @@ function rgbToHex(rgbString) {
 }
 
 
-function normalizeFindings({ gitleaks = [], trivy = [], semgrep = [], bandit = [] }) {
+function normalizeFindings({ gitleaks = [], trivy = [],  bandit = [] }) {
   const normalized = [];
 
   gitleaks.forEach(f => {
@@ -56,18 +56,6 @@ function normalizeFindings({ gitleaks = [], trivy = [], semgrep = [], bandit = [
         Match: vuln.PkgName,
         Entropy: getEntropyFromSeverity(vuln.Severity)
       });
-    });
-  });
-
-  semgrep?.results?.forEach(item => {
-    normalized.push({
-      tool: 'Semgrep',
-      File: item.path,
-      StartLine: item.start?.line || 1,
-      RuleID: item.check_id,
-      Description: item.extra?.message || item.message,
-      Match: '',
-      Entropy: 4.5
     });
   });
 
@@ -140,8 +128,8 @@ function renderChartWithLegend(doc, chartData, titleText, fixedY = null) {
 
 
 async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Images = {}) {
-  const { trivyFindings = [], semgrepFindings = [], banditFindings = [] } = tools;
-  const allFindings = normalizeFindings({ gitleaks: gitleaksFindings, trivy: trivyFindings, semgrep: semgrepFindings, bandit: banditFindings });
+  const { trivyFindings = [],  banditFindings = [] } = tools;
+  const allFindings = normalizeFindings({ gitleaks: gitleaksFindings, trivy: trivyFindings, bandit: banditFindings });
   const filteredFindings = filterFindings(allFindings, config);
 
   const workspacePath = config.workspacePath || process.cwd();
