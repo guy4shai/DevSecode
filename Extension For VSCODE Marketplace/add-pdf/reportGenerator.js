@@ -108,7 +108,7 @@ function renderChartWithLegend(doc, chartData, titleText, fixedY = null) {
   let legendY = chartY;
 
   doc.fillColor('black');
-  doc.font('Times-Bold').fontSize(14).text(titleText, legendX, legendY, { underline: true });
+  doc.font('Times-Bold').fontSize(14).text(titleText, legendX, legendY, { underline: false });
   legendY += 25;
 
   legendItems.forEach(({ label, color }) => {
@@ -149,26 +149,47 @@ async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Ima
     { key: 'sca', title: 'Software Composition Analysis (SCA)' },
     { key: 'sast', title: 'Static Application Security Testing (SAST)' },
   ];
- // doc.addPage();
-
-  // כותרת פתיחה
-  doc.font('Times-Bold').fontSize(26).fillColor('black').text('DevSecode Security Report', {
-    align: 'center',
-  });
-  doc.moveDown(1);
+  // 🟩 גובה העמוד
+  const pageHeight = doc.page.height;
   
-  // שם הפרויקט
+  // 🟩 מרכז Y של העמוד פחות מחצית מגובה הטקסטים הכולל (נניח 80px)
+  const blockHeight = 80;
+  const centerY = (pageHeight - blockHeight) / 2;
+  
+  // 🟦 כותרת ראשית באמצע הדף
+  doc
+    .font('Times-Bold')
+    .fontSize(26)
+    .fillColor('black')
+    .text('DevSecode Security Report', {
+      align: 'center',
+      baseline: 'middle',
+      lineGap: 10,
+      continued: false,
+    });
+  
+  // 🟦 ריווח קטן בין שורות
+  doc.moveDown(0.5);
+  
+  // 🟦 שם הפרויקט (TestObjects לדוגמה)
   const projectName = path.basename(workspacePath);
-  doc.font('Times-Roman').fontSize(16).text(`Project: ${projectName}`, {
-    align: 'center',
-  });
-  doc.moveDown(1);
+  doc
+    .font('Times-Roman')
+    .fontSize(16)
+    .text(`Project: ${projectName}`, {
+      align: 'center',
+    });
   
-  // תאריך
-  doc.fontSize(12).fillColor('gray').text(`Generated on: ${new Date().toLocaleString()}`, {
-    align: 'center',
-  });
+  // 🟫 תאריך למטה
+  doc
+    .fontSize(12)
+    .fillColor('gray')
+    .text(`Generated on: ${new Date().toLocaleString()}`, 0, pageHeight - 70, {
+      align: 'center',
+    });
   
+  // 🟨 קפיצה ליוזמה (הגדר Y ישירות למרכז הדף)
+  doc.y = centerY;
   doc.addPage();
 
   let isFirstSection = true;

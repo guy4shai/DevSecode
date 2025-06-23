@@ -5,6 +5,6 @@
     "Medium",
     "Low"
   ],
-  "sortBy": "line",
+  "sortBy": "severity",
   "workspacePath": "/Users/macbook/DevSecode/TestObjects"
 }
