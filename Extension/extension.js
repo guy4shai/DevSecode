@@ -11,7 +11,7 @@ const { generatePDFReport } = require("./add-pdf/reportGenerator");
 const { getFixedVersionFromOSV } = require("./utils/osvApiHelper");
 const { runBanditScan } = require("./utils/sast");
 const { showDashboard } = require("./utils/showDashboard");
-const { openAlertBanner, setCurrentFindings, setCurrentTrivyFindings, setCurrentBanditFindings, setCurrentContainerFindings,} = require('./utils/openAlertBanner');
+const { openAlertBanner, setCurrentFindings, setCurrentTrivyFindings, setCurrentBanditFindings, setCurrentContainerFindings, } = require('./utils/openAlertBanner');
 
 const {
   initSCA,
@@ -693,14 +693,26 @@ class AlertsProvider {
   }
 
   getChildren() {
+    const containerFindings = (() => {
+      const cf = currentContainerFindings;
+      if (!cf) return [];
+      if (Array.isArray(cf.reports)) {
+        return cf.reports.flatMap((r) =>
+          Array.isArray(r.top_vulnerabilities) ? r.top_vulnerabilities : []
+        );
+      }
+      return Array.isArray(cf.top_vulnerabilities) ? cf.top_vulnerabilities : [];
+    })();
+
     const combinedFindings = [
       ...(currentFindings || []),
       ...(currentTrivyFindings?.Results?.flatMap(
         (r) => r.Vulnerabilities || []
       ) || []),
       ...(currentBanditFindings || []),
-      ...(currentContainerFindings?.reports?.[0]?.top_vulnerabilities || []),
+      ...(containerFindings || []),
     ];
+
 
     console.log("🧪 Bandit Findings in TreeView:", currentBanditFindings);
     console.log("🧩 All Combined Findings:", combinedFindings);
@@ -774,13 +786,14 @@ class AlertsProvider {
 
         console.log("🧠 Mapped Alert", idx, { alertId, line, severity, item });
 
-        return {
-          ...item,
-          severity,
-          alertId,
-          line,
-        };
+        // ✅ מוסיפים שדות על האובייקט המקורי עצמו
+        item.severity = severity;
+        item.alertId = alertId;
+        item.line = line;
+
+        return item; // מחזירים את המקורי, לא עותק מקוצר
       })
+
       .sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);
 
 

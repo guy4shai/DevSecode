@@ -49,32 +49,54 @@ function openAlertBanner(alertItem) {
 
   let reportData = [];
 
-  if (alertItem.VulnerabilityID) {
-      // Trivy
-      if (currentTrivyFindings?.Results) {
-          reportData = currentTrivyFindings.Results.flatMap(
-              (result) => result.Vulnerabilities || []
-          );
-      }
-  } else if (alertItem.ID) {
-      // Container scanning
-      reportData = currentContainerFindings?.top_vulnerabilities || [];
-  } else if (
-      alertItem.test_name ||
-      alertItem.issue_text ||
-      alertItem.issue_severity
-  ) {
-      // Bandit
-      if (Array.isArray(currentBanditFindings)) {
-          reportData = currentBanditFindings;
-      }
+// רשימת קונטיינרים מאוחדת (תומך גם במבנה המשולב עם reports)
+const containerList = (() => {
+  const cf = currentContainerFindings;
+  if (!cf) return [];
+  if (Array.isArray(cf.reports)) {
+    return cf.reports.flatMap((r) => [
+      ...(Array.isArray(r.top_vulnerabilities) ? r.top_vulnerabilities : []),
+      ...(Array.isArray(r.Results)
+        ? r.Results.flatMap((res) => res.Vulnerabilities || [])
+        : []),
+    ]);
+  }
+  // תמיכה לאחור אם נשמר בלי reports
+  const top = Array.isArray(cf.top_vulnerabilities) ? cf.top_vulnerabilities : [];
+  const fromResults = Array.isArray(cf.Results)
+    ? cf.Results.flatMap((res) => res.Vulnerabilities || [])
+    : [];
+  return [...top, ...fromResults];
+})();
+
+// 1) קונטיינר: כשמגיעים מה-Tree יש לנו item.ID (CVE)
+if (alertItem.ID) {
+  reportData = containerList;
+
+// 2) Trivy FS / SCA: מזהים לפי VulnerabilityID
+} else if (alertItem.VulnerabilityID) {
+  if (Array.isArray(currentTrivyFindings)) {
+    reportData = currentTrivyFindings;
+  } else if (currentTrivyFindings?.Results) {
+    reportData = currentTrivyFindings.Results.flatMap(
+      (result) => result.Vulnerabilities || []
+    );
   } else {
-      // Gitleaks
-      if (currentFindings) {
-          reportData = currentFindings;
-      }
+    reportData = [];
   }
 
+// 3) Bandit
+} else if (
+  alertItem.test_name ||
+  alertItem.issue_text ||
+  alertItem.issue_severity
+) {
+  reportData = Array.isArray(currentBanditFindings) ? currentBanditFindings : [];
+
+// 4) Gitleaks (ברירת מחדל)
+} else {
+  reportData = currentFindings || [];
+}
 
   const filePath =
     alertItem.file ||

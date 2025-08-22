@@ -178,53 +178,63 @@
       return item.StartLine ?? item.Location?.StartLine ?? item.line ?? item.line_number ?? 0;
     }
 
-    const match = reportData.find(item =>
-      getAlertId(item) === targetRuleID &&
-      (getLine(item) == targetStartLine || targetStartLine === 0)
-    );
+   let match =
+  reportData.find((item) => {
+    const a = getAlertId(item);
+    return a && a === targetRuleID;
+  }) || alertItem;
 
-    if (!match) {
-      alertsContainer.innerHTML = "<p style='color: white;'>No matching alert found.</p>";
-    } else {
-      const severity = getSeverity(match);
-      const color = severityColors[severity] || severityColors.Unknown;
+// ✦ אם זה Container (יש item.ID ואין line/file) – לא נדרוש שורה בכלל
+const isContainer = !!match.ID && !getLine(match);
 
-      const alert = document.createElement("div");
-      alert.classList.add("alert", severity.toLowerCase());
+// ✦ רנדרינג
+const severity = getSeverity(match);
+const color = severityColors[severity] || severityColors.Unknown;
 
-      const description = match.Description || match.Title || match.issue_text || "N/A";
-      const lineNum = getLine(match);
+const alert = document.createElement("div");
+alert.classList.add("alert", severity.toLowerCase());
 
-      alert.innerHTML = `
-        <div class="details">
-          <p><strong>Description:</strong> ${description}</p>
-          <p><strong>Line:</strong> ${lineNum}</p>
-          <p><strong>Severity:</strong> ${severity}</p>
-        </div>
-      `;
-      alertsContainer.appendChild(alert);
+// בונים תיאור ידידותי גם לקונטיינרים (Package/Installed/Fixed) וגם לאחרים
+const description =
+  match.Description || match.Title || match.issue_text || "N/A";
+const pkgLine = match.PkgName
+  ? `<p><strong>Package:</strong> ${match.PkgName}</p>` : "";
+const instLine = match.InstalledVersion
+  ? `<p><strong>Installed:</strong> ${match.InstalledVersion}</p>` : "";
+const fixLine = match.FixedVersion
+  ? `<p><strong>Fixed:</strong> ${match.FixedVersion}</p>` : "";
+const lineNum = getLine(match) || 0;
+const lineBlock = !isContainer && lineNum
+  ? `<p><strong>Line:</strong> ${lineNum}</p>` : "";
 
-      document.getElementById("alertTitle").innerHTML =
-        `Alert: <strong style="color: ${color};">${getAlertId(match)}</strong>`;
+alert.innerHTML = `
+  <div class="details">
+    <p><strong>Description:</strong> ${description}</p>
+    ${pkgLine}${instLine}${fixLine}
+    ${lineBlock}
+    <p><strong>Severity:</strong> ${severity}</p>
+  </div>
+`;
+alertsContainer.appendChild(alert);
 
-      const goToLineBtn = document.getElementById("goToLineButton");
+document.getElementById("alertTitle").innerHTML = `Alert: <strong style="color: ${color};">${getAlertId(match)}</strong>`;
 
-      if (!filePath || lineNum === "N/A") {
-        goToLineBtn.disabled = true;
-        goToLineBtn.title = "File path or line number is not available";
-      } else {
-        goToLineBtn.disabled = false;
-        goToLineBtn.title = "Go to line in file";
-
-        goToLineBtn.addEventListener("click", function () {
-          vscode.postMessage({
-            command: 'goToLine',
-            filePath: filePath,
-            lineNumber: lineNum
-          });
-        });
-      }
-    }
+// כפתור Go to Line יהיה פעיל רק אם יש path+line אמיתיים
+const goToLineBtn = document.getElementById("goToLineButton");
+if (!filePath || !lineNum || isContainer) {
+  goToLineBtn.disabled = true;
+  goToLineBtn.title = "Not applicable for this alert";
+} else {
+  goToLineBtn.disabled = false;
+  goToLineBtn.title = "Go to line in file";
+  goToLineBtn.addEventListener("click", function () {
+    vscode.postMessage({
+      command: "goToLine",
+      filePath: filePath,
+      lineNumber: lineNum,
+    });
+  });
+}
   </script>
 
 </body>
