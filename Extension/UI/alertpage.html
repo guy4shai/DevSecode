@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca&family=Queens&display=swap" rel="stylesheet" />
+  <title>Alert Detail</title>
+  <style>
+    body {
+      font-family: 'Lexend Deca', sans-serif;
+      padding: 20px;
+      background-color: #1e1e1e;
+      color: white;
+    }
+
+    h1 {
+      font-size: 24px;
+      color: rgb(224, 223, 223);
+      margin-bottom: 20px;
+      font-weight: 550;
+      text-align: left; /* חזרה לשמאל */
+    }
+
+    .alert-card, .alert {
+      animation: fadeScaleIn 0.5s ease-out;
+    }
+
+    .alert-card {
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 20px;
+      background: #fff;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+      margin-bottom: 20px;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
+      color: black;
+    }
+
+    .alert {
+      /* הקיים */
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      background-color: #f9f9f9;
+      border: 1px solid #e0e0e0;
+      font-size: 16.3px;
+      color: black;
+      transition: transform 0.2s ease, box-shadow 0.2s ease; /* הוספת אנימציה חלקה */
+    }
+
+    /* אפקט קפיצה בעת ריחוף */
+    .alert:hover {
+      transform: scale(1.02);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); /* הצללה מוגברת */
+    }
+
+
+    .details p {
+      margin: 8px 0;
+      font-size: 16.3px;
+    }
+
+    .details strong {
+      color: #000000;
+      font-size: 16.3px;
+    }
+
+    .alert.critical {
+      background-color: #B33A3A;
+      color: #fff;
+    }
+
+    .alert.high {
+      background-color: #FF6F61;
+      color: #fff;
+    }
+
+    .alert.medium {
+      background-color: #FFB347;
+      color: #000;
+    }
+
+    .alert.low {
+      background-color: #FFF176;
+      color: #000;
+    }
+
+    .go-to-line-btn {
+      font-family: 'Lexend Deca', sans-serif;
+      padding: 0.55rem 1.2rem; 
+      font-size: 1rem;           
+      background: linear-gradient(135deg, #d6d6d6, #bdbdbd);
+      color: #121212;
+      border: none;
+      border-radius: 10px;      
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+      margin-top: 12px;
+    }
+
+    .go-to-line-btn:hover {
+      background: linear-gradient(135deg, #e2e2e2, #cacaca);
+      transform: scale(1.07);       
+      box-shadow: 0 5px 10px rgba(0, 0, 0, 0.3);
+    }
+
+
+
+
+    .go-to-line-btn:disabled {
+      background-color: #5a5a5a;
+      color: #c1c1c1;
+      cursor: not-allowed;
+    }
+
+    @keyframes fadeScaleIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1 id="alertTitle">Alert:</h1>
+
+  <div id="alertsContainer"></div>
+
+  <button id="goToLineButton" class="go-to-line-btn">Go to Line</button>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+    const alertsContainer = document.getElementById("alertsContainer");
+
+    const severityColors = {
+      Critical: "#B33A3A",
+      High: "#FF6F61",
+      Medium: "#FFB347",
+      Low: "#FFF176",
+      Unknown: "#c5c5c5"
+    };
+
+    function getSeverity(item) {
+      if (item.Entropy !== undefined) {
+        if (item.Entropy > 4.5) return "Critical";
+        if (item.Entropy > 4) return "High";
+        if (item.Entropy > 3.5) return "Medium";
+        return "Low";
+      } else if (item.Severity) {
+        const sev = item.Severity.toLowerCase();
+        if (sev === "critical") return "Critical";
+        if (sev === "high") return "High";
+        if (sev === "medium") return "Medium";
+        if (sev === "low") return "Low";
+      } else if (item.issue_severity) {
+        const sev = item.issue_severity.toLowerCase();
+        if (sev === "critical") return "Critical";
+        if (sev === "high") return "High";
+        if (sev === "medium") return "Medium";
+        if (sev === "low") return "Low";
+      }
+      return "Unknown";
+    }
+
+    function getAlertId(item) {
+      return item.RuleID || item.VulnerabilityID || item.test_name || item.ID || "";
+    }
+
+    function getLine(item) {
+      return item.StartLine ?? item.Location?.StartLine ?? item.line ?? item.line_number ?? 0;
+    }
+
+    const match = reportData.find(item =>
+      getAlertId(item) === targetRuleID &&
+      (getLine(item) == targetStartLine || targetStartLine === 0)
+    );
+
+    if (!match) {
+      alertsContainer.innerHTML = "<p style='color: white;'>No matching alert found.</p>";
+    } else {
+      const severity = getSeverity(match);
+      const color = severityColors[severity] || severityColors.Unknown;
+
+      const alert = document.createElement("div");
+      alert.classList.add("alert", severity.toLowerCase());
+
+      const description = match.Description || match.Title || match.issue_text || "N/A";
+      const lineNum = getLine(match);
+
+      alert.innerHTML = `
+        <div class="details">
+          <p><strong>Description:</strong> ${description}</p>
+          <p><strong>Line:</strong> ${lineNum}</p>
+          <p><strong>Severity:</strong> ${severity}</p>
+        </div>
+      `;
+      alertsContainer.appendChild(alert);
+
+      document.getElementById("alertTitle").innerHTML =
+        `Alert: <strong style="color: ${color};">${getAlertId(match)}</strong>`;
+
+      const goToLineBtn = document.getElementById("goToLineButton");
+
+      if (!filePath || lineNum === "N/A") {
+        goToLineBtn.disabled = true;
+        goToLineBtn.title = "File path or line number is not available";
+      } else {
+        goToLineBtn.disabled = false;
+        goToLineBtn.title = "Go to line in file";
+
+        goToLineBtn.addEventListener("click", function () {
+          vscode.postMessage({
+            command: 'goToLine',
+            filePath: filePath,
+            lineNumber: lineNum
+          });
+        });
+      }
+    }
+  </script>
+
+</body>
+</html>

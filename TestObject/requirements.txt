@@ -1,0 +1,4 @@
+requests==2.19.0
+PyYAML==4.1
+flask==0.12
+jinja2==2.7.3

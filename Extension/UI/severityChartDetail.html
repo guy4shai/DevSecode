@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Severity Detail</title>
+  <link href="https://fonts.googleapis.com/css2?family=Lexend+Deca&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Lexend Deca', sans-serif;
+      background-color: #1e1e1e;
+      padding: 1rem;
+      color: white;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      margin-left: 2.4rem;
+      font-weight: normal;
+      margin-bottom: 1.5rem;
+    }
+    .label-prefix {
+      color: white;
+      font-weight: 300; 
+    }
+
+    .severity-level {
+      font-weight: 700;
+    }
+
+    ul {
+      list-style: none;
+      padding-left: 0;
+      margin-top: 2rem;
+    }
+
+    li {
+      font-size: 1.1rem;
+      margin-bottom: 1.2rem;
+      margin-left: 0; 
+      background-color: #3a3a3a;
+      padding: 1rem;
+      border-radius: 10px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+      color: white;
+      transition: transform 0.2s ease;
+      min-width: 330px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    li:hover {
+      transform: scale(1.02);
+    }
+
+    .vuln-id {
+      font-weight: 600;
+      color: white; 
+      margin-bottom: 0.5rem;
+    }
+
+    .severity-name {
+      color: inherit; 
+      font-weight: 700;
+    }
+
+    .item-wrapper {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.2rem;
+      max-width: 360px;
+      position: relative;
+    }
+
+    .index-number {
+      font-size: 1.2rem;
+      font-weight: 700;
+      min-width: 24px;
+      text-align: right;
+      user-select: none;
+      color: inherit;
+      position: relative;
+      top: 0.9rem; 
+    }
+
+
+
+    .for-details-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+
+    .for-details-label {
+      font-size: 0.95rem;
+    }
+
+    button {
+      font-family: 'Lexend Deca', sans-serif;
+      padding: 0.4rem 0.8rem;
+      font-size: 0.95rem;
+      background: linear-gradient(135deg, #d6d6d6, #bdbdbd);
+      color: #121212;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    button:hover {
+      background: linear-gradient(135deg, #e2e2e2, #cacaca);
+      transform: scale(1.05);
+    }
+
+  </style>
+</head>
+<body>
+  <h1 id="severityLabel"></h1>
+  <div id="listContainer"></div>
+
+  <script>
+    const vscode = acquireVsCodeApi();
+
+    const severityColors = {
+      "Critical": "#B33A3A",
+      "High": "#FF6F61",
+      "Medium": "#FFB347",
+      "Low": "#FFF176",
+      "Unknown": "#718096"
+    };
+
+    const severityLabel = document.getElementById("severityLabel");
+    const severityColor = severityColors[selectedSeverityLabel] || severityColors["Unknown"];
+
+    severityLabel.innerHTML = `
+      <span class="label-prefix">Severity Level:</span>
+      <span class="severity-level" style="color: ${severityColor};">
+        ${selectedSeverityLabel}
+      </span>
+    `;
+
+    const container = document.getElementById("listContainer");
+
+    if (!occurrences || occurrences.length === 0) {
+      const noVuln = document.createElement("li");
+      noVuln.textContent = "No vulnerabilities found for this severity.";
+      noVuln.style.listStyle = "none";
+      container.appendChild(noVuln);
+    } else {
+      occurrences.forEach((vuln, index) => {
+        const wrapper = document.createElement("div");
+        wrapper.className = "item-wrapper";
+
+        // מספר מחוץ ל"קלף" בצבע חומרה
+        const indexSpan = document.createElement("span");
+        indexSpan.className = "index-number";
+        indexSpan.textContent = `${index + 1}`;
+        indexSpan.style.color = severityColor;  // <-- פה הצבע משתנה לפי חומרה
+
+        // קלף עם הטקסט
+        const li = document.createElement("li");
+
+        const name = vuln.title || vuln.VulnerabilityID || vuln.RuleID || vuln.test_name || vuln.ID || "Unnamed";
+
+        const vulnText = document.createElement("div");
+        vulnText.className = "vuln-id";
+
+        // טקסט 'Vulnerability type:' בלבן, השם בצבע חומרה
+        vulnText.innerHTML = `<span class="label-prefix">Vulnerability type:</span> <span class="severity-name" style="color: ${severityColor};">${name}</span>`;
+
+        // כפתור + טקסט 'For more details'
+        const forDetails = document.createElement("div");
+        forDetails.className = "for-details-wrapper";
+
+        const detailsLabel = document.createElement("span");
+        detailsLabel.className = "for-details-label";
+        detailsLabel.textContent = "For more details";
+
+        const button = document.createElement("button");
+        button.textContent = "Go to Alert Page";
+        button.onclick = () => {
+          vscode.postMessage({
+            command: "openAlertBanner",
+            alertItem: vuln
+          });
+        };
+
+        forDetails.appendChild(detailsLabel);
+        forDetails.appendChild(button);
+
+        li.appendChild(vulnText);
+        li.appendChild(forDetails);
+
+        wrapper.appendChild(indexSpan);
+        wrapper.appendChild(li);
+
+        container.appendChild(wrapper);
+      });
+    }
+  </script>
+</body>
+</html>
