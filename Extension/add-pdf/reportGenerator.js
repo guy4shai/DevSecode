@@ -2,6 +2,14 @@ const fs = require('fs');
 const path = require('path');
 const PDFDocument = require('pdfkit');
 
+function resolveProjectName(config) {
+  try {
+    if (config?.projectName) return config.projectName;
+    if (config?.workspacePath) return path.basename(config.workspacePath);
+  } catch (_) {}
+  return 'project';
+}
+
 function getSeverity(entropy) {
   if (entropy > 4.5) return { level: 'Critical', color: '#B33A3A' };
   if (entropy > 4.0) return { level: 'High', color: '#FF6F61' };
@@ -170,16 +178,9 @@ async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Ima
   
   // 🟦 ריווח קטן בין שורות
   doc.moveDown(0.5);
-  
-  // 🟦 שם הפרויקט (TestObjects לדוגמה)
-  const projectName = path.basename(workspacePath);
-  doc
-    .font('Times-Roman')
-    .fontSize(16)
-    .text(`Project: ${projectName}`, {
-      align: 'center',
-    });
-  
+  doc.font('Times-Roman').fontSize(24).text(`Project: ${resolveProjectName(config)}`, { align: 'center' });
+
+
   // 🟫 תאריך למטה
   doc
     .fontSize(12)

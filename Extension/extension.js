@@ -10,7 +10,7 @@ const { initSecretScanner, showDiagnostics } = require("./utils/secretDetection"
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
 const { getFixedVersionFromOSV } = require("./utils/osvApiHelper");
 const { runBanditScan } = require("./utils/sast");
-const { showDashboard } = require("./utils/showDashboard");
+const { showDashboard, getChartImages } = require("./utils/showDashboard");
 const { openAlertBanner, setCurrentFindings, setCurrentTrivyFindings, setCurrentBanditFindings, setCurrentContainerFindings, } = require('./utils/openAlertBanner');
 
 const {
@@ -609,17 +609,27 @@ function activate(context) {
         );
         return;
       }
+      const folders = vscode.workspace.workspaceFolders || [];
+      const wsFolder = folders.length ? folders[0] : null;
+      const wsPath   = wsFolder ? wsFolder.uri.fsPath : (config.workspacePath || undefined);
+      
+      const projName = (wsFolder && wsFolder.name)
+        ? wsFolder.name
+        : (wsPath ? path.basename(wsPath) : 'project');
+      
+      config.workspacePath = config.workspacePath || wsPath;
+      config.projectName   = config.projectName   || projName;
+     
+// if you followed my earlier step to export getChartImages():
+      const images = getChartImages();
+
 
       const base64Images = Object.values(chartImages); // הופך את map לרשימה
-
-      await generatePDFReport(
+      const reportPath = await generatePDFReport(
         findings,
         config,
-        {
-          trivyFindings,
-          banditFindings,
-        },
-        chartImages
+        { trivyFindings, banditFindings },
+        images
       );
 
       // ✅ פתיחת הדוח לאחר יצירתו
