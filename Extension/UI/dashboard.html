@@ -37,7 +37,7 @@
       }
       .chart-box {
         display: flex;
-        align-items: center; /* יישור למעלה */
+        align-items: center; 
         gap: 60px; /* רווח בין התוויות לגרף */
         margin-bottom: 40px;
         margin-top: 40px;
@@ -337,7 +337,6 @@
                 const chartIndex = elements[0].index;
                 const clickedLabel = typeLabels[chartIndex];
 
-                // שלח הודעה ל-extension עם שם החולשה
                 vscode.postMessage({
                   type: "vulnerabilityTypeClicked",
                   label: clickedLabel,
@@ -485,7 +484,7 @@
           },
           options: {
             layout: {
-              padding: 10 // מוסיף מרווח בין הפאי לגבול הקנבס
+              padding: 10 
             },
             plugins: {
               legend: {
@@ -504,7 +503,7 @@
                 const chartIndex = elements[0].index;
                 const clickedLabel = idLabels[chartIndex];
 
-                // שלח הודעה ל-extension עם שם החולשה
+              
                 vscode.postMessage({
                   type: "vulnerabilityTypeClicked",
                   label: clickedLabel,
@@ -654,7 +653,7 @@
           },
           options: {
             layout: {
-              padding: 10 // מוסיף מרווח בין הפאי לגבול הקנבס
+              padding: 10 
             },
             plugins: {
               legend: {
@@ -673,7 +672,7 @@
                 const chartIndex = elements[0].index;
                 const clickedLabel = typeLabels[chartIndex];
 
-                // שלח הודעה ל-extension עם שם החולשה
+           
                 vscode.postMessage({
                   type: "vulnerabilityTypeClicked",
                   label: clickedLabel,
@@ -753,7 +752,6 @@
         const vulnerabilitiesBySeverity = {};
         let totalVulnerabilities = 0;
 
-        // אם זה באמת לפי "top_vulnerabilities"
         data.top_vulnerabilities?.forEach((vul) => {
           const vulId = vul.ID || "Unknown";
           vulnerabilitiesById[vulId] = (vulnerabilitiesById[vulId] || 0) + 1;
@@ -906,7 +904,7 @@
 
         window.addEventListener('load', () => {
           adjustCanvasHeightToLabels();
-          setTimeout(sendChartsToExtension, 5000); // המתנה שהגרפים יסיימו להיטען
+          setTimeout(sendChartsToExtension, 5000);
         });
         window.addEventListener('resize', adjustCanvasHeightToLabels);
 
@@ -919,7 +917,6 @@
             const colorEl = li.querySelector(".label-color");
             let color = colorEl?.style?.backgroundColor || "#000";
         
-            // המרה ל־HEX אם הצבע הוא ב־rgb או hsl
             if (color.startsWith("rgb")) {
               color = rgbToHex(color);
             }

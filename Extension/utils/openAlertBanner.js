@@ -40,7 +40,7 @@ function openAlertBanner(alertItem) {
     vscode.ViewColumn.Active,
     {
       enableScripts: true,
-      localResourceRoots: [vscode.Uri.file(path.join(__dirname, "..", "UI"))], // תקן את הנתיב במידת הצורך
+      localResourceRoots: [vscode.Uri.file(path.join(__dirname, "..", "UI"))], 
     }
   );
 
@@ -49,7 +49,7 @@ function openAlertBanner(alertItem) {
 
   let reportData = [];
 
-// רשימת קונטיינרים מאוחדת (תומך גם במבנה המשולב עם reports)
+// רשימת קונטיינרים מאוחדת 
 const containerList = (() => {
   const cf = currentContainerFindings;
   if (!cf) return [];
@@ -61,7 +61,7 @@ const containerList = (() => {
         : []),
     ]);
   }
-  // תמיכה לאחור אם נשמר בלי reports
+ 
   const top = Array.isArray(cf.top_vulnerabilities) ? cf.top_vulnerabilities : [];
   const fromResults = Array.isArray(cf.Results)
     ? cf.Results.flatMap((res) => res.Vulnerabilities || [])
@@ -69,11 +69,11 @@ const containerList = (() => {
   return [...top, ...fromResults];
 })();
 
-// 1) קונטיינר: כשמגיעים מה-Tree יש לנו item.ID (CVE)
+// Container
 if (alertItem.ID) {
   reportData = containerList;
 
-// 2) Trivy FS / SCA: מזהים לפי VulnerabilityID
+//Trivy
 } else if (alertItem.VulnerabilityID) {
   if (Array.isArray(currentTrivyFindings)) {
     reportData = currentTrivyFindings;
@@ -85,7 +85,7 @@ if (alertItem.ID) {
     reportData = [];
   }
 
-// 3) Bandit
+//Bandit
 } else if (
   alertItem.test_name ||
   alertItem.issue_text ||
@@ -93,7 +93,7 @@ if (alertItem.ID) {
 ) {
   reportData = Array.isArray(currentBanditFindings) ? currentBanditFindings : [];
 
-// 4) Gitleaks (ברירת מחדל)
+//Gitleaks
 } else {
   reportData = currentFindings || [];
 }

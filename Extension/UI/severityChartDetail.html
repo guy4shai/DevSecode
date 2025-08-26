@@ -151,11 +151,10 @@
         const wrapper = document.createElement("div");
         wrapper.className = "item-wrapper";
 
-        // מספר מחוץ ל"קלף" בצבע חומרה
         const indexSpan = document.createElement("span");
         indexSpan.className = "index-number";
         indexSpan.textContent = `${index + 1}`;
-        indexSpan.style.color = severityColor;  // <-- פה הצבע משתנה לפי חומרה
+        indexSpan.style.color = severityColor;  
 
         // קלף עם הטקסט
         const li = document.createElement("li");
@@ -165,10 +164,8 @@
         const vulnText = document.createElement("div");
         vulnText.className = "vuln-id";
 
-        // טקסט 'Vulnerability type:' בלבן, השם בצבע חומרה
         vulnText.innerHTML = `<span class="label-prefix">Vulnerability type:</span> <span class="severity-name" style="color: ${severityColor};">${name}</span>`;
 
-        // כפתור + טקסט 'For more details'
         const forDetails = document.createElement("div");
         forDetails.className = "for-details-wrapper";
 

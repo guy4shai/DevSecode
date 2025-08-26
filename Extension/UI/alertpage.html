@@ -18,7 +18,7 @@
       color: rgb(224, 223, 223);
       margin-bottom: 20px;
       font-weight: 550;
-      text-align: left; /* חזרה לשמאל */
+      text-align: left; 
     }
 
     .alert-card, .alert {
@@ -39,7 +39,6 @@
     }
 
     .alert {
-      /* הקיים */
       padding: 15px;
       margin-bottom: 15px;
       border-radius: 8px;
@@ -47,13 +46,13 @@
       border: 1px solid #e0e0e0;
       font-size: 16.3px;
       color: black;
-      transition: transform 0.2s ease, box-shadow 0.2s ease; /* הוספת אנימציה חלקה */
+      transition: transform 0.2s ease, box-shadow 0.2s ease; 
     }
 
-    /* אפקט קפיצה בעת ריחוף */
+
     .alert:hover {
       transform: scale(1.02);
-      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); /* הצללה מוגברת */
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); 
     }
 
 
@@ -179,22 +178,21 @@
     }
 
    let match =
-  reportData.find((item) => {
-    const a = getAlertId(item);
-    return a && a === targetRuleID;
-  }) || alertItem;
+    reportData.find((item) => {
+      const a = getAlertId(item);
+      return a && a === targetRuleID && getLine(item) === targetStartLine;
+    }) || alertItem;
 
-// ✦ אם זה Container (יש item.ID ואין line/file) – לא נדרוש שורה בכלל
+
 const isContainer = !!match.ID && !getLine(match);
 
-// ✦ רנדרינג
+
 const severity = getSeverity(match);
 const color = severityColors[severity] || severityColors.Unknown;
 
 const alert = document.createElement("div");
 alert.classList.add("alert", severity.toLowerCase());
 
-// בונים תיאור ידידותי גם לקונטיינרים (Package/Installed/Fixed) וגם לאחרים
 const description =
   match.Description || match.Title || match.issue_text || "N/A";
 const lineNum = getLine(match) || 0;

@@ -729,7 +729,6 @@ class AlertsProvider {
       Unknown: 4,
     };
 
-    // פונקציה אחידה להערכת חומרה לפי מאפיינים שונים בממצאים השונים
     function getSeverity(item) {
       // Gitleaks משתמש ב-Entropy
       if (item.Entropy !== undefined) {
@@ -739,7 +738,6 @@ class AlertsProvider {
         return "Low";
       }
 
-      // Trivy, Semgrep, Bandit משתמשים ב-Severity או Level
       if (item.Severity) {
         const sev = item.Severity.toLowerCase();
         if (sev === "critical") return "Critical";
@@ -786,12 +784,11 @@ class AlertsProvider {
 
         console.log("🧠 Mapped Alert", idx, { alertId, line, severity, item });
 
-        // ✅ מוסיפים שדות על האובייקט המקורי עצמו
         item.severity = severity;
         item.alertId = alertId;
         item.line = line;
 
-        return item; // מחזירים את המקורי, לא עותק מקוצר
+        return item; 
       })
 
       .sort((a, b) => severityRank[a.severity] - severityRank[b.severity]);

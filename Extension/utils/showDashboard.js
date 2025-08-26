@@ -28,7 +28,7 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
   );
   const imageUri = panel.webview.asWebviewUri(imagePath);
 
-  // 🆕 קריאת הדוח של Trivy
+  //Trivy
   const trivyReportPath = path.join(getTempScanDir(), "trivy_report.json");
 
   let trivyData = null;
@@ -41,7 +41,7 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
     }
   }
 
-  // 📘 קריאת דוח Bandit
+  //Bandit
   const banditReportPath = path.join(getTempScanDir(), "bandit_report.json");
 
   let banditData = null;
@@ -57,6 +57,7 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
     }
   }
 
+  //Container
   const containerReportPath = path.join(getTempScanDir(), "ContainerScanning_Report.json");
   let containerData = null;
   if (fs.existsSync(containerReportPath)) {
@@ -80,7 +81,6 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
   globalContainer = currentContainerFindings || [];
 
 
-  // 🧠 הוספת שני הדוחות כסקריפטים לדף
   html = html
     .replace('src="./devsecode_logo.png"', `src="${imageUri}"`)
     .replace(
@@ -111,6 +111,10 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
       console.log(`📊 Got image & legend: ${message.chartId}`);
     }
 
+    //************************************************
+    // Vulnerability Chart
+    //************************************************
+
     if (message.type === "vulnerabilityTypeClicked") {
       const clickedType = message.label;
 
@@ -133,8 +137,6 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
       );
       let rawHtml = fs.readFileSync(htmlPath, "utf8");
  
-
-      // מיזוג כל הסריקות
       const allFindings = [
         ...(globalFindings || []),
         ...(globalTrivy?.Results?.flatMap(r => r.Vulnerabilities || []) || []),
@@ -143,7 +145,6 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
       ];
 
 
-      //const clickedTypeLower = clickedType.toLowerCase();
       const clickedTypeLower = (clickedType || "").toString().toLowerCase();
 
 
@@ -161,7 +162,7 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
         );
       });
 
-      // פונקציה שמוציאה שורה תקינה מכל ממצא (אם קיימת)
+
       function getLine(item) {
         return (
           item.StartLine ||
@@ -194,7 +195,6 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
         file: getFilePath(item),
       }));
 
-      // הזרקת מידע ל־HTML לפני סגירת </head>
       rawHtml = rawHtml.replace(
         "</head>",
         `<script>
@@ -208,7 +208,7 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
       detailPanel.webview.onDidReceiveMessage(
         (message) => {
           if (message.command === "openAlertBanner" && message.alertItem) {
-            openAlertBanner(message.alertItem); // משתמש בפונקציה הקיימת
+            openAlertBanner(message.alertItem); 
           }
         },
         undefined,
@@ -217,6 +217,9 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
     }
 
     //************************************************
+    // Severity Chart
+    //************************************************
+
     if (message.type === "severitySliceClicked") {
       const clickedSeverity = message.label;
       const clickedScanner = message.scanner;
