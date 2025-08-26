@@ -371,5 +371,8 @@ function getTempScanDir() {
     vscode.workspace.workspaceFolders?.[0].uri.fsPath || "default";
   return path.join(os.tmpdir(), "devsecode", path.basename(workspacePath));
 }
+function getChartImages() {
+  return chartImages; 
+}
 
-module.exports = { showDashboard };
+module.exports = { showDashboard, getChartImages };
