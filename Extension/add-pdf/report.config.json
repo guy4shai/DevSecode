@@ -1,8 +1,7 @@
 {
   "selectedSeverities": [
-    "High",
-    "Medium"
+    "High"
   ],
-  "sortBy": "line",
-  "workspacePath": "/Users/macbook/Downloads/ארכיון 2/project"
+  "sortBy": "severity",
+  "workspacePath": "/Users/bardavidi/Desktop/Computer Science/DevSecode/TestObject"
 }
