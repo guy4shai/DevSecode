@@ -82,8 +82,6 @@
       top: 0.9rem; 
     }
 
-
-
     .for-details-wrapper {
       display: flex;
       align-items: center;
@@ -93,6 +91,16 @@
 
     .for-details-label {
       font-size: 0.95rem;
+    }
+
+    #listContainer {
+      display: grid;
+      grid-template-columns: 1fr; /* ברירת מחדל עמודה אחת */
+      gap: 1rem;
+    }
+
+    #listContainer.two-columns {
+      grid-template-columns: 1fr 1fr; /* אם יש יותר מ-5 → שתי עמודות */
     }
 
     button {
@@ -140,6 +148,11 @@
     `;
 
     const container = document.getElementById("listContainer");
+
+    if (occurrences && occurrences.length > 5) {
+      container.classList.add("two-columns");
+    }
+
 
     if (!occurrences || occurrences.length === 0) {
       const noVuln = document.createElement("li");
