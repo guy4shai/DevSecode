@@ -1,6 +1,5 @@
 const vscode = require("vscode");
 const cp = require("child_process");
-const { spawn } = require("child_process");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -8,7 +7,6 @@ const chartImages = {};
 const { runFullContainerScan } = require("./utils/containerReport");
 const { initSecretScanner, showDiagnostics } = require("./utils/secretDetection");
 const { generatePDFReport } = require("./add-pdf/reportGenerator");
-const { getFixedVersionFromOSV } = require("./utils/osvApiHelper");
 const { runBanditScan } = require("./utils/sast");
 const { showDashboard, getChartImages } = require("./utils/showDashboard");
 const { openAlertBanner, setCurrentFindings, setCurrentTrivyFindings, setCurrentBanditFindings, setCurrentContainerFindings, } = require('./utils/openAlertBanner');
@@ -318,29 +316,6 @@ function activate(context) {
     }
   );
 
-  // 🔒 DAST integration directly embedded into DevSecode Extension
-  // This is a standalone function based on the logic of dast.py, rewritten in Node.js to be part of the extension.
-
-  // vscode.commands.registerCommand("DevSecode.runDast", async () => {
-  //   const targetUrl = await vscode.window.showInputBox({
-  //     prompt: "Enter the target URL for DAST scan (e.g., http://localhost:3000)",
-  //   });
-
-  //   if (!targetUrl) {
-  //     vscode.window.showErrorMessage("No URL provided for DAST scan.");
-  //     return;
-  //   }
-
-  //   const outputFilePath = path.join(getDastTempDir(), "dast_report.json");
-
-  //   try {
-  //     await runDastScan(targetUrl, outputFilePath);
-  //     vscode.window.showInformationMessage("✅ DAST scan completed successfully.");
-  //   } catch (err) {
-  //     vscode.window.showErrorMessage("❌ DAST scan failed.");
-  //   }
-  // });
-
   async function runContainerScan(imageName, rootPath, trivyConfigToUse) {
     const safeName = imageName.replace(/[^a-zA-Z0-9_.-]/g, "_");
     const imageReportPath = path.join(rootPath, `trivy_image_${safeName}.json`);
@@ -385,154 +360,6 @@ function activate(context) {
     }
   );
   context.subscriptions.push(openAlertBannerCommand);
-  // const generatePdfCommand = vscode.commands.registerCommand(
-  //   "devsecode.generateCustomPDF",
-  //   async () => {
-  //     // 🟩 בחירת חומרות
-  //     const severityOptions = await vscode.window.showQuickPick(
-  //       ["Critical", "High", "Medium", "Low"],
-  //       {
-  //         canPickMany: true,
-  //         placeHolder: "Select severity levels to include",
-  //       }
-  //     );
-
-  //     if (!severityOptions || severityOptions.length === 0) {
-  //       vscode.window.showErrorMessage(
-  //         "❌ Please select at least one severity level."
-  //       );
-  //       return;
-  //     }
-
-  //     // 🟩 בחירת מיון
-  //     const sortOrder = await vscode.window.showQuickPick(
-  //       ["Severity", "Line Number"],
-  //       {
-  //         placeHolder: "Select how to sort the report",
-  //       }
-  //     );
-
-  //     if (!sortOrder) {
-  //       vscode.window.showErrorMessage(
-  //         "❌ Please select a sort order for the report."
-  //       );
-  //       return;
-  //     }
-
-  //     const sortKey = sortOrder === "Line Number" ? "line" : "severity";
-
-  //     // 🟩 איתור תיקיית העבודה
-  //     const workspaceFolders = vscode.workspace.workspaceFolders;
-  //     if (!workspaceFolders || workspaceFolders.length === 0) {
-  //       vscode.window.showErrorMessage("❌ No workspace folder found.");
-  //       return;
-  //     }
-  //     const workspacePath = workspaceFolders[0].uri.fsPath;
-
-  //     // 🟩 קונפיגורציית הדוח
-  //     const config = {
-  //       selectedSeverities: severityOptions, // ✅ רמות חומרה שנבחרו
-  //       sortBy: sortKey,
-  //       workspacePath: workspacePath,
-  //     };
-
-  //     // שמירה מקומית של config (לא חובה, רק לצורך פיתוח)
-  //     const configPath = path.join(__dirname, "add-pdf", "report.config.json");
-  //     fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-
-  //     // 🟩 טוען את הדוח JSON
-  //     const findingsPath = path.join(getTempScanDir(), "gitleaks_report.json");
-  //     if (!fs.existsSync(findingsPath)) {
-  //       vscode.window.showErrorMessage(
-  //         "❌ Could not find gitleaks_report.json in UI folder."
-  //       );
-  //       return;
-  //     }
-
-  //     const trivyPath = path.join(getTempScanDir(), "trivy_report.json");
-  //     const banditPath = path.join(getTempScanDir(), "bandit_report.json");
-  //     console.log("📁 Bandit Report Path:", banditPath);
-
-
-  //     let trivyFindings = [];
-  //     let banditFindings = [];
-
-  //     if (fs.existsSync(trivyPath)) {
-  //       try {
-  //         trivyFindings = JSON.parse(fs.readFileSync(trivyPath, "utf-8"));
-  //       } catch (e) {
-  //         vscode.window.showWarningMessage(
-  //           "⚠️ Failed to load trivy_report.json."
-  //         );
-  //       }
-  //     }
-
-  //     if (fs.existsSync(banditPath)) {
-  //       try {
-  //         banditFindings = JSON.parse(fs.readFileSync(banditPath, "utf-8"));
-  //       } catch (e) {
-  //         vscode.window.showWarningMessage(
-  //           "⚠️ Failed to load bandit_report.json."
-  //         );
-  //       }
-  //     }
-  //     let findings;
-  //     try {
-  //       const findingsRaw = fs.readFileSync(findingsPath, "utf-8");
-  //       findings = JSON.parse(findingsRaw);
-  //     } catch (e) {
-  //       vscode.window.showErrorMessage(
-  //         "❌ Failed to read or parse gitleaks_report.json."
-  //       );
-  //       return;
-  //     }
-
-  //     const base64Images = Object.values(chartImages); // הופך את map לרשימה
-
-  //     await generatePDFReport(
-  //       findings,
-  //       config,
-  //       {
-  //         trivyFindings,
-  //         banditFindings,
-  //       },
-  //       chartImages
-  //     );
-
-  //     // ✅ פתיחת הדוח לאחר יצירתו
-  //     vscode.window
-  //       .showInformationMessage(
-  //         "✅ PDF report generated successfully.",
-  //         "Open Report"
-  //       )
-  //       .then(async (selection) => {
-  //         if (selection === "Open Report") {
-  //           try {
-  //             const open = await import("open").then((mod) => mod.default);
-  //             await open(reportPath);
-  //           } catch (err) {
-  //             vscode.window.showErrorMessage(
-  //               `❌ Failed to open the report: ${err.message}`
-  //             );
-  //           }
-  //         }
-  //       });
-  //   }
-  // );
-
-  // context.subscriptions.push(generatePdfCommand);
-
-  // // 🟩 כפתור בשורת הסטטוס
-  // const pdfStatusBarButton = vscode.window.createStatusBarItem(
-  //   vscode.StatusBarAlignment.Left,
-  //   100
-  // );
-  // pdfStatusBarButton.command = "devsecode.generateCustomPDF";
-  // pdfStatusBarButton.text = "$(file-pdf) Generate PDF Report";
-  // pdfStatusBarButton.tooltip = "Click to generate a custom PDF report";
-  // pdfStatusBarButton.show();
-
-  // context.subscriptions.push(pdfStatusBarButton);
 
   const generatePdfCommand = vscode.commands.registerCommand(
     "devsecode.generateCustomPDF",
