@@ -76,7 +76,6 @@
         overflow-wrap: break-word;
       }
 
-
       .label-color {
         width: 14px;
         height: 14px;
@@ -89,6 +88,18 @@
         max-width: 250px;
         max-height: 250px;
       }
+
+      .no-vuln-message {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 250px; /* גובה דומה לגרף */
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #000000;
+        text-align: center;
+      }
+
     </style>
   </head>
   <body>
@@ -260,6 +271,17 @@
 
       function createCharts(types, severities) {
         const typeLabels = Object.keys(types);
+
+        const totalVulnerabilities = Object.values(types).reduce((sum, val) => sum + val,0);
+
+        // אם אין חולשות – ננקה הכל ונציג הודעה יפה במרכז
+        if (totalVulnerabilities === 0) {
+          document.querySelector(".chart-container").innerHTML = `
+            <div class="no-vuln-message">No vulnerabilities detected.</div>
+          `;
+          return;
+        }
+
         const severityOrder = ["Critical", "High", "Medium", "Low"];
         const severityColorsMap = {
           Critical: "#B33A3A",
@@ -394,11 +416,6 @@
           },
         });
 
-
-        const totalVulnerabilities = Object.values(types).reduce(
-          (sum, val) => sum + val,
-          0
-        );
         countDisplay.textContent = `Number of vulnerabilities detected: ${totalVulnerabilities}`;
       }
 
@@ -438,6 +455,16 @@
       }
 
       function createScaCharts(vulnerabilityIds, severities, totalVulnerabilities) {
+
+        const countEl = document.getElementById("scaVulnerabilityCount");
+
+        if (totalVulnerabilities === 0) {
+          document.querySelector("#scaTypeLabels").parentElement.parentElement.innerHTML = `
+            <div class="no-vuln-message">No SCA vulnerabilities detected.</div>
+          `;
+          return;
+        }
+
         const idLabels = Object.keys(vulnerabilityIds);
         const idColors = generateGreenBluePalette(idLabels.length);
         const idCounts = Object.values(vulnerabilityIds);
@@ -605,6 +632,16 @@
 
 
       function createBanditCharts(types, severities, total) {
+
+        const countEl = document.getElementById("banditVulnerabilityCount");
+
+        if (total === 0) {
+          document.querySelector("#banditTypeLabels").parentElement.parentElement.innerHTML = `
+            <div class="no-vuln-message">No SAST vulnerabilities detected.</div>
+          `;
+          return;
+        }
+
         const typeLabels = Object.keys(types);
         const typeColors = generateGreenBluePalette(typeLabels.length);
         const typeCounts = Object.values(types);
@@ -774,6 +811,16 @@
 
 
       function createContainerCharts(vulnerabilityIds, severities, totalVulnerabilities) {
+
+        const countEl = document.getElementById("containerVulnerabilityCount");
+
+        if (totalVulnerabilities === 0) {
+          document.querySelector("#containerTypeLabels").parentElement.parentElement.innerHTML = `
+            <div class="no-vuln-message">No Container vulnerabilities detected.</div>
+          `;
+          return;
+        }
+
         const idLabels = Object.keys(vulnerabilityIds);
         const idColors = generateGreenBluePalette(idLabels.length);
         const idCounts = Object.values(vulnerabilityIds);

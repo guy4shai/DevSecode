@@ -33,6 +33,29 @@ function getTempScanDir() {
   return path.join(os.tmpdir(), "devsecode", path.basename(workspacePath));
 }
 
+function clearOldReports() {
+  const tempDir = getTempScanDir();
+  const filesToDelete = [
+    "gitleaks_report.json",
+    "trivy_report.json",
+    "bandit_report.json",
+    "ContainerScanning_Report.json",
+  ];
+
+  for (const f of filesToDelete) {
+    const fullPath = path.join(tempDir, f);
+    if (fs.existsSync(fullPath)) {
+      try {
+        fs.unlinkSync(fullPath);
+        console.log(`🧹 Deleted old report: ${fullPath}`);
+      } catch (err) {
+        console.warn(`⚠️ Failed to delete ${fullPath}:`, err);
+      }
+    }
+  }
+}
+
+
 function activate(context) {
   alertsProvider = new AlertsProvider(context);
   vscode.window.registerTreeDataProvider("devsecodeAlerts", alertsProvider);
@@ -44,6 +67,7 @@ function activate(context) {
   let disposable = vscode.commands.registerCommand(
     "DevSecode.runScan",
     async (uri) => {
+      clearOldReports();
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders) {
         vscode.window.showErrorMessage(
