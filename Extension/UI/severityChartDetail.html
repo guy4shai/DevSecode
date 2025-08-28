@@ -46,6 +46,8 @@
       min-width: 330px;
       display: flex;
       flex-direction: column;
+      word-break: break-word;
+      overflow-wrap: break-word;
     }
 
     li:hover {
@@ -66,7 +68,7 @@
     .item-wrapper {
       display: flex;
       gap: 1rem;
-      margin-bottom: 1.2rem;
+      margin-bottom: 0.1rem;
       max-width: 360px;
       position: relative;
     }
@@ -95,12 +97,12 @@
 
     #listContainer {
       display: grid;
-      grid-template-columns: 1fr; /* ברירת מחדל עמודה אחת */
+      grid-template-columns: 1fr;
       gap: 1rem;
     }
 
     #listContainer.two-columns {
-      grid-template-columns: 1fr 1fr; /* אם יש יותר מ-5 → שתי עמודות */
+      grid-template-columns: 1fr 1fr;
     }
 
     button {

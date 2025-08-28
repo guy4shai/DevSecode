@@ -277,7 +277,7 @@
         // אם אין חולשות – ננקה הכל ונציג הודעה יפה במרכז
         if (totalVulnerabilities === 0) {
           document.querySelector(".chart-container").innerHTML = `
-            <div class="no-vuln-message">No vulnerabilities detected.</div>
+            <div class="no-vuln-message">No Secret Detection vulnerabilities detected.</div>
           `;
           return;
         }
@@ -816,7 +816,7 @@
 
         if (totalVulnerabilities === 0) {
           document.querySelector("#containerTypeLabels").parentElement.parentElement.innerHTML = `
-            <div class="no-vuln-message">No Container vulnerabilities detected.</div>
+            <div class="no-vuln-message">No Container Scanning vulnerabilities detected.</div>
           `;
           return;
         }
