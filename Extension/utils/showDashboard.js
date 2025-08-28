@@ -57,7 +57,7 @@ function showDashboard(context, findings, currentTrivyFindings = [], currentBand
     }
   }
 
-  //Container
+  //Container scanning
   const containerReportPath = path.join(getTempScanDir(), "ContainerScanning_Report.json");
   let containerData = null;
   if (fs.existsSync(containerReportPath)) {

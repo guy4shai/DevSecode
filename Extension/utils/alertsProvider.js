@@ -84,7 +84,7 @@ class AlertsProvider {
     };
 
     function getSeverity(item) {
-      // Gitleaks משתמש ב-Entropy
+      //Gitleaks
       if (item.Entropy !== undefined) {
         if (item.Entropy > 4.5) return "Critical";
         if (item.Entropy > 4) return "High";
@@ -136,7 +136,7 @@ class AlertsProvider {
         const alertId = getAlertId(item);
         const line = getLine(item);
 
-        console.log("🧠 Mapped Alert", idx, { alertId, line, severity, item });
+        console.log("Mapped Alert", idx, { alertId, line, severity, item });
 
         item.severity = severity;
         item.alertId = alertId;

@@ -210,7 +210,6 @@ alertsContainer.appendChild(alert);
 
 document.getElementById("alertTitle").innerHTML = `Alert: <strong style="color: ${color};">${getAlertId(match)}</strong>`;
 
-// כפתור Go to Line יהיה פעיל רק אם יש path+line אמיתיים
 const goToLineBtn = document.getElementById("goToLineButton");
 if (!filePath || !lineNum || isContainer) {
   goToLineBtn.disabled = true;

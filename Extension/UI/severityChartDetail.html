@@ -171,7 +171,6 @@
         indexSpan.textContent = `${index + 1}`;
         indexSpan.style.color = severityColor;  
 
-        // קלף עם הטקסט
         const li = document.createElement("li");
 
         const name = vuln.title || vuln.VulnerabilityID || vuln.RuleID || vuln.test_name || vuln.ID || "Unnamed";

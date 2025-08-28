@@ -209,7 +209,6 @@ function activate(context) {
                         trivyData = JSON.parse(trivyRaw);
                         console.log("✅ Trivy report loaded successfully.");
 
-                        // ✅ הוספת מספרי שורות ל־Vulnerabilities
                         attachLinesToTrivy(
                           trivyReportPath,
                           path.join(rootPath, "requirements.txt")
@@ -220,8 +219,6 @@ function activate(context) {
                         );
                         console.warn("Trivy parsing error:", err);
                       }
-
-                      // 💡 אתה יכול להעביר את הנתונים לדאשבורד או להוסיף אותם ל-alertsProvider אם צריך
 
                       vscode.window.showInformationMessage(
                         "Trivy SCA scan completed successfully."
@@ -483,7 +480,7 @@ function activate(context) {
       config.workspacePath = config.workspacePath || wsPath;
       config.projectName   = config.projectName   || projName;
      
-// if you followed my earlier step to export getChartImages():
+      // if you followed my earlier step to export getChartImages():
       const images = getChartImages();
 
 

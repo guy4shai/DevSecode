@@ -38,13 +38,13 @@
       .chart-box {
         display: flex;
         align-items: center; 
-        gap: 60px; /* רווח בין התוויות לגרף */
+        gap: 60px; /* space between labels to the charts*/
         margin-bottom: 40px;
         margin-top: 40px;
       }
       .chart-labels {
         width: 250px;
-        min-height: 250px; /* גובה שווה לגובה הקנבס */
+        min-height: 250px; /* height fits to canvas height*/
         display: flex;
         justify-content: flex-start;
         flex-direction: column;
@@ -53,7 +53,7 @@
         padding: 0;
         margin: 0;
         display: flex;
-        gap: 7px; /* רווח בין הפריטים */
+        gap: 7px; /* space between objects*/
       }
 
       .chart-labels ul {
@@ -72,7 +72,7 @@
         color: black;
         font-size: medium;
         white-space: normal; 
-        word-break: break-word; /* שובר מילים ארוכות */
+        word-break: break-word; /* breaks words */
         overflow-wrap: break-word;
       }
 
@@ -93,7 +93,7 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 250px; /* גובה דומה לגרף */
+        height: 250px; /* height fits to the chart's height*/
         font-size: 1.1rem;
         font-weight: 700;
         color: #000000;
@@ -242,8 +242,8 @@
 
       function generateGreenBluePalette(count) {
         const colors = [];
-        const startHue = 160; // ירוק
-        const endHue = 220; // כחול
+        const startHue = 160; // green
+        const endHue = 220; // blue
         for (let i = 0; i < count; i++) {
           const hue = startHue + ((endHue - startHue) * i) / count;
           colors.push(`hsl(${hue}, 60%, 65%)`);
@@ -274,7 +274,6 @@
 
         const totalVulnerabilities = Object.values(types).reduce((sum, val) => sum + val,0);
 
-        // אם אין חולשות – ננקה הכל ונציג הודעה יפה במרכז
         if (totalVulnerabilities === 0) {
           document.querySelector(".chart-container").innerHTML = `
             <div class="no-vuln-message">No Secret Detection vulnerabilities detected.</div>
@@ -340,7 +339,7 @@
           },
           options: {
             layout: {
-              padding: 10 // מוסיף מרווח בין הפאי לגבול הקנבס
+              padding: 10
             },
             plugins: {
               legend: {
@@ -940,10 +939,8 @@
 
           const labelsHeight = labels.getBoundingClientRect().height;
 
-          // הגדר את גובה הקנבס כמו גובה הלייבלים
           canvas.style.height = `${labelsHeight}px`;
 
-          // אם את משתמשת ב-Chart.js
           if (canvas.chartInstance) {
             canvas.chartInstance.resize();
           }
