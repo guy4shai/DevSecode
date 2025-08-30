@@ -166,4 +166,3 @@ async function runFullContainerScan(imageName, workspacePath, trivyConfigPath) {
 }
 
 module.exports = { runFullContainerScan };
-

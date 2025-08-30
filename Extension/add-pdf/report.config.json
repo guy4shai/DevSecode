@@ -1,7 +1,10 @@
 {
   "selectedSeverities": [
-    "High"
+    "Critical",
+    "High",
+    "Medium",
+    "Low"
   ],
-  "sortBy": "severity",
-  "workspacePath": "/Users/bardavidi/Desktop/Computer Science/DevSecode/TestObject"
+  "sortBy": "line",
+  "workspacePath": "/Users/macbook/DevSecode/TestObject"
 }

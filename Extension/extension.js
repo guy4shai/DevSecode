@@ -27,6 +27,7 @@ const {
 
 const { initSCA, showScaDiagnostics, attachFilePathToTrivyFindings, attachLinesToTrivy, registerScaInlineFixes,} = require("./utils/sca");
 
+
 let alertsProvider;
 let currentFindings = [];
 let currentTrivyFindings = [];
@@ -427,12 +428,16 @@ function activate(context) {
 
       // 🟩 טוען את הדוח JSON
       const findingsPath = path.join(getTempScanDir(), "gitleaks_report.json");
-      if (!fs.existsSync(findingsPath)) {
-        vscode.window.showErrorMessage(
-          "❌ Could not find gitleaks_report.json in UI folder."
-        );
-        return;
+      let gitleaksFindings = [];
+      if (fs.existsSync(findingsPath)) {
+        try {
+          gitleaksFindings = JSON.parse(fs.readFileSync(findingsPath, "utf-8"));
+        } catch (e) {
+          vscode.window.showWarningMessage("⚠️ Failed to parse gitleaks_report.json; continuing without findings.");
+        }
       }
+      
+      
 
       const trivyPath = path.join(getTempScanDir(), "trivy_report.json");
       const banditPath = path.join(getTempScanDir(), "bandit_report.json");
@@ -481,14 +486,36 @@ function activate(context) {
       config.projectName   = config.projectName   || projName;
      
       // if you followed my earlier step to export getChartImages():
-      const images = getChartImages();
+
+      const images = (typeof getChartImages === 'function') ? getChartImages() : {};
+      // Load Container scan (Trivy image) findings if the file exists
+        const containerPath = path.join(getTempScanDir(), "ContainerScanning_Report.json");
+        let containerFindings = [];
+        if (fs.existsSync(containerPath)) {
+          try {
+            const raw = JSON.parse(fs.readFileSync(containerPath, "utf8"));
+            if (Array.isArray(raw)) {
+              // flat list
+              containerFindings = raw;
+            } else if (Array.isArray(raw?.Results)) {
+              // standard Trivy image schema
+              containerFindings = raw.Results.flatMap(r =>
+                Array.isArray(r.Vulnerabilities) ? r.Vulnerabilities : []
+              );
+            } else if (Array.isArray(raw?.Vulnerabilities)) {
+              // some tools dump at top-level
+              containerFindings = raw.Vulnerabilities;
+            }
+          } catch (e) {
+            vscode.window.showWarningMessage("⚠️ Failed to parse ContainerScanning_Report.json; continuing without container results.");
+          }
+        }
 
 
-      const base64Images = Object.values(chartImages); // הופך את map לרשימה
       const reportPath = await generatePDFReport(
-        findings,
+        gitleaksFindings, 
         config,
-        { trivyFindings, banditFindings },
+        { trivyFindings, banditFindings, containerFindings },
         images
       );
 
@@ -501,8 +528,7 @@ function activate(context) {
         .then(async (selection) => {
           if (selection === "Open Report") {
             try {
-              const open = await import("open").then((mod) => mod.default);
-              await open(reportPath);
+              vscode.env.openExternal(vscode.Uri.file(reportPath));
             } catch (err) {
               vscode.window.showErrorMessage(
                 `❌ Failed to open the report: ${err.message}`

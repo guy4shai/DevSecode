@@ -38,10 +38,11 @@ function rgbToHex(rgbString) {
 }
 
 
-function normalizeFindings({ gitleaks = [], trivy = [],  bandit = [] }) {
+function normalizeFindings({ gitleaks = [], trivy = {}, bandit = {}, container = {} }) {
   const normalized = [];
 
-  gitleaks.forEach(f => {
+  // --- Secrets (Gitleaks) ---
+  (Array.isArray(gitleaks) ? gitleaks : []).forEach(f => {
     normalized.push({
       tool: 'Gitleaks',
       File: f.File,
@@ -53,21 +54,32 @@ function normalizeFindings({ gitleaks = [], trivy = [],  bandit = [] }) {
     });
   });
 
-  trivy.Results?.forEach(result => {
-    result.Vulnerabilities?.forEach(vuln => {
-      normalized.push({
-        tool: 'Trivy',
-        File: result.Target || vuln.PkgName,
-        StartLine: 1,
-        RuleID: vuln.VulnerabilityID,
-        Description: vuln.Title,
-        Match: vuln.PkgName,
-        Entropy: getEntropyFromSeverity(vuln.Severity)
-      });
+  // Helper for SCA/Trivy-style vulns
+  const pushTrivy = (target, vuln) => {
+    if (!vuln) return;
+    normalized.push({
+      tool: 'Trivy',
+      File: target || vuln.Target || vuln.PkgName || vuln.PackageName || 'package',
+      StartLine: 1,
+      RuleID: vuln.VulnerabilityID || vuln.id,
+      Description: vuln.Title || vuln.description || vuln.Description || 'Vulnerability',
+      Match: vuln.PkgName || vuln.PackageName || '',
+      Entropy: getEntropyFromSeverity(vuln.Severity || vuln.severity)
     });
-  });
+  };
 
-  bandit?.results?.forEach(item => {
+  // --- SCA (Trivy filesystem scan) ---
+  if (Array.isArray(trivy?.Results)) {
+    trivy.Results.forEach(r => (r.Vulnerabilities || []).forEach(v => pushTrivy(r.Target, v)));
+  } else if (Array.isArray(trivy?.Vulnerabilities)) {
+    trivy.Vulnerabilities.forEach(v => pushTrivy(trivy.Target, v));
+  } else if (Array.isArray(trivy)) {
+    // some tools give a flat array of vulns
+    trivy.forEach(v => pushTrivy(v.Target, v));
+  }
+
+  // --- SAST (Bandit) ---
+  (bandit?.results || []).forEach(item => {
     normalized.push({
       tool: 'Bandit',
       File: item.filename,
@@ -79,8 +91,32 @@ function normalizeFindings({ gitleaks = [], trivy = [],  bandit = [] }) {
     });
   });
 
+  // === Container Scanning (Trivy image scan) ===
+  const pushContainer = (target, vuln) => {
+    if (!vuln) return;
+    normalized.push({
+      tool: 'Container',
+      File: target || vuln.Target || vuln.Image || vuln.PkgName || 'container-image',
+      StartLine: 1,
+      RuleID: vuln.VulnerabilityID || vuln.id,
+      Description: vuln.Title || vuln.description || vuln.Description || 'Container vulnerability',
+      Match: vuln.PkgName || vuln.pkgName || vuln.PackageName || '',
+      Entropy: getEntropyFromSeverity(vuln.Severity || vuln.severity)
+    });
+  };
+
+  if (Array.isArray(container?.Results)) {
+    container.Results.forEach(r => (r.Vulnerabilities || []).forEach(v => pushContainer(r.Target, v)));
+  } else if (Array.isArray(container?.Vulnerabilities)) {
+    container.Vulnerabilities.forEach(v => pushContainer(container.Target, v));
+  } else if (Array.isArray(container)) {
+    container.forEach(v => pushContainer(v.Target, v));
+  }
+  // === end Container Scanning ===
+
   return normalized;
 }
+
 
 function getEntropyFromSeverity(sev) {
   switch (sev?.toLowerCase?.()) {
@@ -101,7 +137,16 @@ function filterFindings(findings, config) {
 }
 
 function renderChartWithLegend(doc, chartData, titleText, fixedY = null) {
-  if (!chartData?.image) return;
+  let entry = null;
+  if (typeof chartData === 'string') {
+    entry = { image: chartData, legend: [] };
+  } else if (chartData && chartData.image) {
+    entry = { image: chartData.image, legend: chartData.legend || [] };
+  } else if (chartData && chartData.dataUrl) {
+    entry = { image: chartData.dataUrl, legend: chartData.legend || [] };
+  }
+
+  if (!entry || !entry.image) return;
 
   const imageBuffer = Buffer.from(chartData.image.replace(/^data:image\/png;base64,/, ''), 'base64');
   const chartX = 300;
@@ -136,8 +181,8 @@ function renderChartWithLegend(doc, chartData, titleText, fixedY = null) {
 
 
 async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Images = {}) {
-  const { trivyFindings = [],  banditFindings = [] } = tools;
-  const allFindings = normalizeFindings({ gitleaks: gitleaksFindings, trivy: trivyFindings, bandit: banditFindings });
+  const { trivyFindings = [], banditFindings = [], containerFindings = [] } = tools || {};
+  const allFindings = normalizeFindings({ gitleaks: gitleaksFindings, trivy: trivyFindings, bandit: banditFindings, container: containerFindings  });
   const filteredFindings = filterFindings(allFindings, config);
 
   const workspacePath = config.workspacePath || process.cwd();
