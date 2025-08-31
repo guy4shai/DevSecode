@@ -36,6 +36,17 @@ function rgbToHex(rgbString) {
       .join("")
   );
 }
+// --- Layout helpers ---
+function getMargins(doc) {
+  const m = (doc.options && doc.options.margins) || { top: 50, bottom: 50, left: 50, right: 50 };
+  return m;
+}
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 
 
 function normalizeFindings({ gitleaks = [], trivy = {}, bandit = {}, container = {} }) {
@@ -136,47 +147,151 @@ function filterFindings(findings, config) {
     : filtered.sort((a, b) => (a.StartLine || 0) - (b.StartLine || 0));
 }
 
-function renderChartWithLegend(doc, chartData, titleText, fixedY = null) {
-  let entry = null;
-  if (typeof chartData === 'string') {
-    entry = { image: chartData, legend: [] };
-  } else if (chartData && chartData.image) {
-    entry = { image: chartData.image, legend: chartData.legend || [] };
-  } else if (chartData && chartData.dataUrl) {
-    entry = { image: chartData.dataUrl, legend: chartData.legend || [] };
+function renderChartWithLegend(doc, chartData, headerText) {
+  if (!chartData) return;
+
+  // Normalize input
+  const legendArray = Array.isArray(chartData.legend) ? chartData.legend : [];
+  const dataUrl = chartData.image || chartData.dataUrl || chartData;
+  if (!dataUrl || typeof dataUrl !== 'string') return;
+
+  // Decode base64 PNG
+  const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+  if (!base64) return;
+  const imageBuffer = Buffer.from(base64, 'base64');
+
+  // ---- Layout constants ----
+  const { top, bottom, left, right } = getMargins(doc);
+  const pageW = doc.page.width;
+  const pageH = doc.page.height;
+
+  const HEADER_SIZE       = 14;     // כותרת לגרף ("Findings by ...")
+  const FONT_SIZE         = 11;     // טקסט מקרא
+  const ROW_MIN           = 14;     // גובה מינימלי לשורה
+  const ROW_GAP           = 2;      // רווח קטן בין פריטי מקרא
+  const GAP_AFTER_HEADER  = 8;
+
+  const LEGEND_COL_W      = 230;    // רוחב עמודת מקרא
+  const LEGEND_COLS       = 2;      // כמה עמודות מקרא בעמוד
+
+  const CHART_W           = 260;    // רוחב הגרף
+  const CHART_H           = 260;    // גובה הגרף (אם הגרפים שלך לא ריבועיים – שנהי כאן)
+  const CHART_FIT         = [CHART_W, CHART_H];
+
+  // מיקומים: מקרא משמאל, גרף מימין – קו עליון משותף
+  const legendX = left;
+  const chartX  = pageW - right - CHART_W;
+
+  // בדיקת מקום מינימלי לפני כותרת
+  const minBlockHeight = HEADER_SIZE + GAP_AFTER_HEADER + ROW_MIN * 3;
+  if (doc.y > pageH - bottom - minBlockHeight) {
+    doc.addPage();
   }
 
-  if (!entry || !entry.image) return;
+  // כותרת לגרף
+  doc.font('Times-Bold').fontSize(HEADER_SIZE).fillColor('black');
+  doc.text(headerText, legendX, doc.y, { align: 'left' });
 
-  const imageBuffer = Buffer.from(chartData.image.replace(/^data:image\/png;base64,/, ''), 'base64');
-  const chartX = 300;
-  const chartY = fixedY !== null ? fixedY : doc.y;
-  const chartWidth = 250;
-  const chartHeight = 250;
+  // נקודת התחלה לשניהם
+  const yTop = doc.y + GAP_AFTER_HEADER;
 
-  doc.image(imageBuffer, chartX, chartY, { fit: [chartWidth, chartHeight] });
+  // פונקציה שמציירת "עמוד" אחד: מקרא בעד 2 עמודות + הגרף מימין
+  const drawOnePage = (startIndex) => {
+    // טווח גובה זמין בעמוד זה
+    const availableH = pageH - bottom - yTop;
 
-  const legendItems = chartData.legend || [];
-  const legendX = 50;
-  let legendY = chartY;
+    // ציור המקרא בשתי עמודות עם מדידת גובה אמיתית לכל פריט (ללא חפיפות)
+    doc.font('Times-Roman').fontSize(FONT_SIZE).fillColor('black');
 
-  doc.fillColor('black');
-  doc.font('Times-Bold').fontSize(14).text(titleText, legendX, legendY, { underline: false });
-  legendY += 25;
+    let col = 0;
+    let curX = legendX;
+    let curY = yTop;
+    const BOX = 9; // ריבוע צבע
 
-  legendItems.forEach(({ label, color }) => {
-    if (color && color.startsWith("rgb")) {
-      color = rgbToHex(color);
+    let i = startIndex;
+    while (i < legendArray.length) {
+      const it = legendArray[i];
+      const label = (typeof it === 'string') ? it : (it?.label ?? '');
+      let color   = (typeof it === 'object') ? it?.color : null;
+      if (color && /^rgb\(/i.test(color)) color = rgbToHex(color);
+
+      // נמדוד גובה טקסט בפועל לרוחב העמודה
+      const textWidth = LEGEND_COL_W - (BOX + 6);
+      const measuredH = Math.max(
+        ROW_MIN,
+        doc.heightOfString(` ${label}`, { width: textWidth })
+      );
+      const itemH = measuredH + ROW_GAP;
+
+      // אם אין מקום לפריט בעמודה זו – עוברים לעמודה הבאה
+      if (curY + itemH > yTop + availableH) {
+        col += 1;
+        if (col >= LEGEND_COLS) break; // אין יותר עמודות — נעצור לעמוד הבא
+        curX = legendX + col * LEGEND_COL_W;
+        curY = yTop;
+        continue; // ננסה שוב באותה אינדקס לאחר מעבר עמודה
+      }
+
+      // ציור ריבוע צבע
+      if (color) {
+        doc.fillColor(color).rect(curX, curY + 3, BOX, BOX).fill();
+      }
+      // ציור הטקסט (עטיפה לפי רוחב)
+      doc.fillColor('black').font('Times-Roman');
+      doc.text(` ${label}`, curX + BOX + 4, curY, { width: textWidth });
+
+      curY += itemH;
+      i += 1; // עברנו לפריט הבא
     }
 
-    const boxSize = 10;
-    doc.fillColor(color).rect(legendX, legendY, boxSize, boxSize).fill();
-    doc.fillColor('black').font('Times-Bold').fontSize(12).text(` ${label}`, legendX + boxSize + 5, legendY - 1);
-    legendY += 20;
-  });
+    // צייר את הגרף מיושר ל־yTop
+    doc.image(imageBuffer, chartX, yTop, { fit: CHART_FIT, align: 'right', valign: 'top' });
 
-  doc.moveDown(2);
+    // גובה הבלוק – המקסימום בין המקרא שצויר לבין גובה הגרף
+    const legendHeightUsed = Math.max(curY - yTop, 0);
+    const blockHeight = Math.max(legendHeightUsed, CHART_H);
+
+    // קידום y אחרי הבלוק
+    doc.y = yTop + blockHeight + 12;
+
+    // נחזיר כמה פריטים צרכנו
+    return i - startIndex;
+  };
+
+  // מציירים עמודים רצופים עד שנגמור את כל המקרא
+  let index = 0;
+  if (legendArray.length === 0) {
+    // אין מקרא? נצייר רק את הגרף
+    doc.image(imageBuffer, chartX, yTop, { fit: CHART_FIT, align: 'right', valign: 'top' });
+    doc.y = yTop + CHART_H + 12;
+    return;
+  }
+
+  // העמוד הראשון – כבר בכאן; אם נשאר, נעבור לעמודים נוספים
+  let consumed = drawOnePage(index);
+  index += consumed;
+
+  while (index < legendArray.length) {
+    // עמוד חדש – חזרה על הכותרת כדי לשמור הקשר
+    doc.addPage();
+    doc.font('Times-Bold').fontSize(HEADER_SIZE).fillColor('black');
+    doc.text(headerText, left, top, { align: 'left' });
+    // נקודת התחלה לעמוד זה
+    const _yTop = doc.y + GAP_AFTER_HEADER;
+
+    // נצייר את עמוד ההמשך
+    const availableH2 = pageH - bottom - _yTop;
+    // ננצל את אותה פונקציה – אך צריך לגרום לה לצייר מול _yTop
+    // פיתרון פשוט: נזיז זמנית את doc.y כדי שהחישובים ישתמשו ב־_yTop
+    const oldY = doc.y;
+    doc.y = _yTop - GAP_AFTER_HEADER; // כך שתוך הפונקציה yTop יחושב כראוי
+    consumed = drawOnePage(index);
+    index += consumed;
+    // נחזיר את doc.y למצב שכבר הועלה ע"י drawOnePage
+  }
 }
+
+
 
 
 
@@ -253,8 +368,10 @@ async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Ima
       }
   
       doc.font('Times-Bold').fontSize(18).text(title, { align: 'center' });
-      renderChartWithLegend(doc, base64Images[typeKey], 'Findings by Type:', 100);
-      renderChartWithLegend(doc, base64Images[severityKey], 'Findings by Severity:', 420);
+      doc.moveDown(0.5);
+      renderChartWithLegend(doc, base64Images[typeKey], 'Findings by Type');
+      doc.moveDown(0.8);
+      renderChartWithLegend(doc, base64Images[severityKey], 'Findings by Severity');
     }
   }
 
