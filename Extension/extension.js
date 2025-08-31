@@ -61,6 +61,58 @@ function clearOldReports() {
     }
   }
 }
+function flattenContainerReports(raw) {
+  const items = [];
+  if (!raw) return items;
+
+  const addVuln = (v, defaultTarget) => {
+    const target =
+      v.Target || v.target ||
+      defaultTarget ||
+      v.PkgName || v.pkgName || v.PackageName || v.Package ||
+      'container-image';
+    // נשמור Target תמיד, כדי שה-PDF ידע לשים שם תמונה/קובץ
+    items.push({ ...v, Target: target });
+  };
+
+  const processReport = (rep) => {
+    const artifact =
+      rep.ArtifactName || rep.artifactName ||
+      rep.Metadata?.ArtifactName || rep.metadata?.ArtifactName || rep.metadata?.artifactName ||
+      'container-image';
+
+    // פורמט Trivy קלאסי (אם קיים)
+    const results = rep.Results || rep.results || [];
+    results.forEach(res => {
+      const rTarget = res.Target || res.target || artifact;
+      const vulns = res.Vulnerabilities || res.vulnerabilities || [];
+      vulns.forEach(v => addVuln(v, rTarget));
+    });
+
+    // ✅ תמיכה בפורמט המשולב שלך: top_vulnerabilities
+    const tops = rep.top_vulnerabilities || rep.TopVulnerabilities || [];
+    tops.forEach(v => addVuln(v, artifact));
+  };
+
+  // צורות שונות:
+  if (Array.isArray(raw)) {
+    // כבר מערך וולנרביליטיז
+    raw.forEach(v => addVuln(v));
+  } else {
+    if (Array.isArray(raw.Results) || Array.isArray(raw.results)) processReport(raw);
+    if (Array.isArray(raw.Vulnerabilities) || Array.isArray(raw.vulnerabilities)) {
+      (raw.Vulnerabilities || raw.vulnerabilities).forEach(v =>
+        addVuln(v, raw.Target || raw.target || raw.ArtifactName || raw.artifactName)
+      );
+    }
+    if (Array.isArray(raw.reports) || Array.isArray(raw.Reports)) {
+      (raw.reports || raw.Reports).forEach(processReport);
+    }
+  }
+
+  return items;
+}
+
 
 
 function activate(context) {
@@ -489,28 +541,21 @@ function activate(context) {
 
       const images = (typeof getChartImages === 'function') ? getChartImages() : {};
       // Load Container scan (Trivy image) findings if the file exists
-        const containerPath = path.join(getTempScanDir(), "ContainerScanning_Report.json");
-        let containerFindings = [];
-        if (fs.existsSync(containerPath)) {
-          try {
-            const raw = JSON.parse(fs.readFileSync(containerPath, "utf8"));
-            if (Array.isArray(raw)) {
-              // flat list
-              containerFindings = raw;
-            } else if (Array.isArray(raw?.Results)) {
-              // standard Trivy image schema
-              containerFindings = raw.Results.flatMap(r =>
-                Array.isArray(r.Vulnerabilities) ? r.Vulnerabilities : []
-              );
-            } else if (Array.isArray(raw?.Vulnerabilities)) {
-              // some tools dump at top-level
-              containerFindings = raw.Vulnerabilities;
-            }
-          } catch (e) {
-            vscode.window.showWarningMessage("⚠️ Failed to parse ContainerScanning_Report.json; continuing without container results.");
-          }
-        }
-
+    const containerPath = path.join(getTempScanDir(), "ContainerScanning_Report.json");
+    let containerFindings = [];
+    if (fs.existsSync(containerPath)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(containerPath, "utf8"));
+        containerFindings = flattenContainerReports(raw);
+      } catch (e) {
+        vscode.window.showWarningMessage("⚠️ Failed to parse ContainerScanning_Report.json; continuing without container results.");
+      }
+    } else if (currentContainerFindings && Object.keys(currentContainerFindings).length) {
+      // גיבוי: אם אין קובץ, ננסה את הזיכרון בריצה הזו
+      try {
+        containerFindings = flattenContainerReports(currentContainerFindings);
+      } catch (_) { /* ignore */ }
+    }
 
       const reportPath = await generatePDFReport(
         gitleaksFindings, 

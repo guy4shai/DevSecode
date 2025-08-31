@@ -47,7 +47,18 @@ function chunk(arr, size) {
   return out;
 }
 
+function asObject(x) {
+  if (!x) return null;
+  if (typeof x === 'object') return x;
 
+  if (typeof x === 'string') {
+    // נסה לפרש מחרוזת JSON ישירה
+    try { return JSON.parse(x); } catch (_) {}
+    // נסה לפרש כנתיב לקובץ JSON
+    try { return JSON.parse(fs.readFileSync(x, 'utf8')); } catch (_) {}
+  }
+  return null;
+}
 
 function normalizeFindings({ gitleaks = [], trivy = {}, bandit = {}, container = {} }) {
   const normalized = [];
@@ -65,7 +76,7 @@ function normalizeFindings({ gitleaks = [], trivy = {}, bandit = {}, container =
     });
   });
 
-  // Helper for SCA/Trivy-style vulns
+  // --- Helper for SCA/Trivy FS vulns ---
   const pushTrivy = (target, vuln) => {
     if (!vuln) return;
     normalized.push({
@@ -107,21 +118,55 @@ function normalizeFindings({ gitleaks = [], trivy = {}, bandit = {}, container =
     if (!vuln) return;
     normalized.push({
       tool: 'Container',
-      File: target || vuln.Target || vuln.Image || vuln.PkgName || 'container-image',
-      StartLine: 1,
-      RuleID: vuln.VulnerabilityID || vuln.id,
-      Description: vuln.Title || vuln.description || vuln.Description || 'Container vulnerability',
-      Match: vuln.PkgName || vuln.pkgName || vuln.PackageName || '',
+      // עדיפות לנתיב קובץ אם יש, אחרת Artifact/Image/Package
+      File: vuln.file_path || target || vuln.Target || vuln.Image || vuln.PkgName || 'container-image',
+      StartLine: vuln.line_number || 1,
+      // מזהה — תמיכה גם ב-ID גדול/קטן וגם ב-VulnerabilityID
+      RuleID: vuln.VulnerabilityID || vuln.id || vuln.ID,
+      // תיאור/כותרת
+      Description: vuln.Title || vuln.title || vuln.description || vuln.Description || 'Container vulnerability',
+      // שם חבילה — תמיכה גם ב-Package
+      Match: vuln.PkgName || vuln.pkgName || vuln.PackageName || vuln.Package || '',
+      // חומרה → אנטרופי
       Entropy: getEntropyFromSeverity(vuln.Severity || vuln.severity)
     });
   };
 
-  if (Array.isArray(container?.Results)) {
-    container.Results.forEach(r => (r.Vulnerabilities || []).forEach(v => pushContainer(r.Target, v)));
-  } else if (Array.isArray(container?.Vulnerabilities)) {
-    container.Vulnerabilities.forEach(v => pushContainer(container.Target, v));
+  // עוזר: עיבוד דו"ח תמונה בודד (Trivy Image)
+  const eatResultsArray = (rep) => {
+    const artifact =
+      rep.ArtifactName || rep.artifactName ||
+      rep.Metadata?.ArtifactName || rep.metadata?.ArtifactName || rep.metadata?.artifactName ||
+      'container-image';
+
+    // Trivy classic
+    const results = rep.Results || rep.results || [];
+    results.forEach(res => {
+      const tgt = res.Target || res.target || artifact;
+      const vulns = res.Vulnerabilities || res.vulnerabilities || [];
+      vulns.forEach(v => pushContainer(tgt, v));
+    });
+
+    // פורמט משולב: top_vulnerabilities
+    const tops = rep.top_vulnerabilities || rep.TopVulnerabilities || [];
+    tops.forEach(v => pushContainer(artifact, v));
+  };
+
+  // תמיכה בכל הווריאציות האפשריות
+  if (Array.isArray(container?.Results) || Array.isArray(container?.results)) {
+    // דו"ח תמונה בודד
+    eatResultsArray(container);
+  } else if (Array.isArray(container?.Vulnerabilities) || Array.isArray(container?.vulnerabilities)) {
+    // צורה פחות שגרתית – וולנרביליטיז ברמה העליונה
+    (container.Vulnerabilities || container.vulnerabilities).forEach(v =>
+      pushContainer(container.Target || container.target || container.ArtifactName || container.artifactName, v)
+    );
+  } else if (Array.isArray(container?.reports) || Array.isArray(container?.Reports)) {
+    // מספר דו"חות משולבים (כפי שאת מייצרת)
+    (container.reports || container.Reports).forEach(eatResultsArray);
   } else if (Array.isArray(container)) {
-    container.forEach(v => pushContainer(v.Target, v));
+    // כבר מערך וולנרביליטיז מפולס (למשל מ-flattenContainerReports)
+    container.forEach(v => pushContainer(v.Target || v.target, v));
   }
   // === end Container Scanning ===
 
@@ -296,8 +341,13 @@ function renderChartWithLegend(doc, chartData, headerText) {
 
 
 async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Images = {}) {
-  const { trivyFindings = [], banditFindings = [], containerFindings = [] } = tools || {};
-  const allFindings = normalizeFindings({ gitleaks: gitleaksFindings, trivy: trivyFindings, bandit: banditFindings, container: containerFindings  });
+  const { trivyFindings = null, banditFindings = null, containerFindings = null } = tools || {};
+  const allFindings = normalizeFindings({
+    gitleaks: Array.isArray(gitleaksFindings) ? gitleaksFindings : (asObject(gitleaksFindings) || []),
+    trivy: asObject(trivyFindings) || [],
+    bandit: asObject(banditFindings) || {},
+    container: asObject(containerFindings) || {}
+  });
   const filteredFindings = filterFindings(allFindings, config);
 
   const workspacePath = config.workspacePath || process.cwd();
