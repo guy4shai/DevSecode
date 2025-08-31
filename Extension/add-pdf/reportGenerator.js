@@ -201,6 +201,7 @@ async function generatePDFReport(gitleaksFindings, config, tools = {}, base64Ima
     { key: 'secrets', title: 'Secret Detection' },
     { key: 'sca', title: 'Software Composition Analysis (SCA)' },
     { key: 'sast', title: 'Static Application Security Testing (SAST)' },
+    { key: 'container', title: 'Container Scanning' },
   ];
   // 🟩 גובה העמוד
   const pageHeight = doc.page.height;
