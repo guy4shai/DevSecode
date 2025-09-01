@@ -68,43 +68,51 @@ async function generateContainerReport(imageName, flatFindings) {
     Digest: raw.Digest || "unknown",
   };
 
-  // 2. Severity counts & summary
+  // 2. Group by CVE ID while preserving file locations
+  const cveMap = new Map();
+  flatFindings.forEach(v => {
+    if (!v.VulnerabilityID) return;
+
+    if (!cveMap.has(v.VulnerabilityID)) {
+      // First time seeing this CVE - create base entry
+      cveMap.set(v.VulnerabilityID, {
+        ID: v.VulnerabilityID,
+        Title: v.Title || v.VulnerabilityID,
+        Severity: v.Severity,
+        Description: v.Description || "",
+        CVSSv3Score: v.CVSS?.nvd?.V3Score || v.CVSSScore || null,
+        CVSSv3Vector: v.CVSS?.nvd?.V3Vector || "",
+        References: v.References || [],
+        // Keep file locations from original finding
+        file_path: v.file_path || null,
+        line_number: v.line_number || null
+      });
+    }
+  });
+
+  // 3. Convert to array and count severities
   const severities = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"];
   const counts = Object.fromEntries(severities.map(s => [s, 0]));
-  flatFindings.forEach(v => { if (counts[v.Severity] !== undefined) counts[v.Severity]++; });
-  const summaryLine = `Total vulnerabilities: ${flatFindings.length} (` +
+  const uniqueVulns = Array.from(cveMap.values());
+  uniqueVulns.forEach(v => { if (counts[v.Severity] !== undefined) counts[v.Severity]++; });
+
+  const summaryLine = `Total unique CVEs: ${uniqueVulns.length} (` +
     severities.map(s => `${s}: ${counts[s]}`).join(", ") + ")";
 
-  // 3. Top vulnerabilities (CRITICAL/HIGH)
-  const topVulns = flatFindings
+  // 4. Top vulnerabilities (CRITICAL/HIGH)
+  const topVulns = uniqueVulns
     .filter(v => ["CRITICAL", "HIGH"].includes(v.Severity))
     .sort((a, b) => {
       const rank = { CRITICAL: 0, HIGH: 1 };
       if (rank[a.Severity] !== rank[b.Severity]) return rank[a.Severity] - rank[b.Severity];
-      const scoreA = a.CVSS?.nvd?.V3Score || a.CVSSScore || 0;
-      const scoreB = b.CVSS?.nvd?.V3Score || b.CVSSScore || 0;
-      return scoreB - scoreA;
-    })
-    .map(v => ({
-      ID: v.VulnerabilityID,
-      Title: v.Title || v.VulnerabilityID,
-      Severity: v.Severity,
-      Package: v.PkgName,
-      InstalledVersion: v.InstalledVersion,
-      FixedVersion: v.FixedVersion || null,
-      Description: v.Description || "",
-      CVSSv3Score: v.CVSS?.nvd?.V3Score || v.CVSSScore || null,
-      CVSSv3Vector: v.CVSS?.nvd?.V3Vector || "",
-      References: v.References || [],
-      Remediation: v.FixedVersion
-        ? `Upgrade ${v.PkgName} to ${v.FixedVersion}`
-        : `Rebuild image using patched base image`,
-      file_path: v.file_path || null,
-      line_number: v.line_number || null,
-    }));
+      return (b.CVSSv3Score || 0) - (a.CVSSv3Score || 0);
+    });
 
-  // 4. Recommendations
-  const recommendations = topVulns.map(v => ({ ID: v.ID, recommendation: v.Remediation }));
+  // 5. Simple recommendations based on unique CVEs
+  const recommendations = topVulns.map(v => ({
+    ID: v.ID,
+    recommendation: "Update affected components to a non-vulnerable version"
+  }));
 
   return {
     summary_line: summaryLine,
@@ -112,7 +120,7 @@ async function generateContainerReport(imageName, flatFindings) {
     vulnerability_summary: counts,
     top_vulnerabilities: topVulns,
     recommendations,
-    next_steps: "After applying fixes, rerun DevSecode container scan to verify remediation.",
+    next_steps: "After applying fixes, rerun DevSecode container scan to verify remediation."
   };
 }
 
@@ -165,4 +173,4 @@ async function runFullContainerScan(imageName, workspacePath, trivyConfigPath) {
   return generateContainerReport(imageName, flat);
 }
 
-module.exports = { runFullContainerScan };
+module.exports = { runFullContainerScan};

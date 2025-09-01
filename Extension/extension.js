@@ -304,7 +304,7 @@ function activate(context) {
                       if (containerImage) {
                         const targets =
                           containerImage.trim().toLowerCase() === "all"
-                            ? collectImages(rootPath)
+                            ? collectImagesFromDockerfiles(rootPath)
                             : [containerImage];
 
                         const reports = [];
